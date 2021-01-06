@@ -36,9 +36,9 @@ class Programmer():
                 print("Creating LCD", self.lcd)
                 self.lcd = RPi_I2C_driver.lcd(0x3f)
                 print(self.lcd)
-            self.lcd.lcd_clear()
-            self.lcd.lcd_display_string(line1, 1)
-            self.lcd.lcd_display_string(line2, 2)
+            #self.lcd.lcd_clear()
+            if line1 is not None: self.lcd.lcd_display_string(line1, 1)
+            if line2 is not None: self.lcd.lcd_display_string(line2, 2)
         except Exception as e:
             print("Trapped exception when creating LCD", e)
             self.lcd = None
@@ -110,7 +110,9 @@ class Programmer():
         self.setLcd(line1, line2)
 
     def showMessage(self, line1, line2):
-        self.setLcd("{: <16}".format(line1), "{: <16}".format(line2))
+        line1 = "{: <16}".format(line1) if line1 is not None else None
+        line2 = "{: <16}".format(line2) if line2 is not None else None
+        self.setLcd(line1, line2)
 
     def runMenu(self, menuName):
         print("runMenu", menuName)

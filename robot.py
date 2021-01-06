@@ -12,8 +12,9 @@ The robot will start its default behaviour (call to start()) but can be stopped 
 from crawler import *
 from programmer import *
 from time import sleep
-from lidar import *
-
+from distance_tf_mini import DistanceSensor
+from thermal_amg88xx import ThermalSensor
+from gpiozero import Button
 
 class Robot(Programmer):
 
@@ -23,7 +24,21 @@ class Robot(Programmer):
         # Create an animal with 2 legs
         self.crawler = Crawler()
 
-        self.lidar = Lidar()
+        # Distance sensor
+        self.distanceSensor = DistanceSensor(14)
+        self.distanceSensorThread = None
+        self.pauseDistanceSensor = False
+        self.runningDistanceSensor = False
+
+        # Thermal sensor
+        self.thermalSensor = ThermalSensor()
+
+        # Antennae
+        self.leftAntenna = Button(6)
+        self.rightAntenna = Button(12)
+        self.antennaeThread = None
+        self.leftAntenna.when_pressed = self.leftAntennaPressed
+        self.rightAntenna.when_pressed = self.rightAntennaPressed
 
         # Adjust parameter between 0.5 (fast) and 6 (slow) to change speed of movement
         self.crawler.setStepsPerDegree(self.crawler.settings['STEPSPERDEGREE'])
@@ -34,10 +49,6 @@ class Robot(Programmer):
         self.timerDelay = 0             # delay before next action runs
         self.timerAction = None         # action to run next (one-letter code)
         self.timerAgeStart = 0          # age of robot when timer was started
-
-        self.lidarThread = None
-        self.pauseLidar = False
-        self.runningLidar = False
 
         # Random action generator
         self.randomThread = None        # thread on which random action generator runs
@@ -70,7 +81,7 @@ class Robot(Programmer):
 
     def forward(self):
         self.handleAction(self.crawler.forwardTurtle, "F")
-        self.pauseLidar = False # turn lidar back on for moving forwards
+        self.pauseDistanceSensor = False # turn DistanceSensor back on for moving forwards
 
     def backward(self):
         self.handleAction(self.crawler.backwardTurtle, "B")
@@ -138,16 +149,16 @@ class Robot(Programmer):
 
     def start(self):
         """Start the robot"""
-        self.pauseLidar = False
+        self.pauseDistanceSensor = False
         self.forward()
-        self.startLidar()
+        self.startDistanceSensor()
         self.startRandom()
 
     def stop(self):
         """Stop the robot"""
         self.showMessage("Stopping","")
         self.handleAction(None, "W")
-        self.runningLidar = False
+        self.runningDistanceSensor = False
         self.runningRandom = False
 
     def startRandom(self):
@@ -214,24 +225,31 @@ class Robot(Programmer):
             Timer(10, self.forward()).start()"""
         
 
+    # Sensors
     # ---------------------------------------------------------------------------------------------
 
-    def startLidar(self):
-        self.lidarThread = Thread(target=self.runLidar)
-        self.lidarThread.start() 
+    def startDistanceSensor(self):
+        self.distanceSensorThread = Thread(target=self.runDistanceSensor)
+        self.distanceSensorThread.start() 
 
-    def runLidar(self):
-        self.runningLidar = True
-        while self.runningLidar:
-            if not self.pauseLidar:
-                dist = self.lidar.readCm()
+    def runDistanceSensor(self):
+        self.runningDistanceSensor = True
+        while self.runningDistanceSensor:
+            if not self.pauseDistanceSensor:
+                dist = self.distanceSensor.readCm()
                 #print(dist)
                 if dist < 10 and dist > 1: # sometimes readings of 1 come in error # !!dist
                     print("Interrupt distance", dist)
                     self.backward()
                     self.setTimer(10, 'F') # !!turn time
-                    self.pauseLidar = True
+                    self.pauseDistanceSensor = True
             sleep(0.1)
+
+    def leftAntennaPressed(self):
+        pass
+
+    def rightAntennaPressed(self):
+        pass
 
 
 
@@ -484,14 +502,40 @@ class Robot(Programmer):
     # Testing
     # ---------------------------------------------------------------------------------------------
 
-    def testLidar(self):
+    def testDistanceSensor(self):
         options = ["return",".",".",".","."]
         self.showOptions(options)
+        self.showMessage("DistanceSensor", None)
         while True:
-            self.showOptions(options, "Lidar", str(self.lidar.readCm()))
+            self.showMessage(None, str(self.distanceSensor.readCm()))
             optionName = self.getSelectedOption(options)
             if optionName=="return":
                 break   
+
+    def testAntennae(self):
+        options = ["return",".",".",".","."]
+        self.showOptions(options)
+        self.showMessage("Antennae", None)
+        while True:
+            msg = "{} - {}".format(self.leftAntenna.is_pressed, self.rightAntenna.is_pressed)
+            self.showMessage(None, msg)
+            optionName = self.getSelectedOption(options)
+            if optionName=="return":
+                break           
+
+    def testThermalSensor(self):
+        options = ["return",".",".",".","."]
+        self.showOptions(options)
+        self.showMessage("ThermalSensor", None)
+        while True:
+            matrix = self.thermalSensor.readMatrix()
+            min,max,mean = self.thermalSensor.minMaxMeanTemperature(matrix)
+            print(min,max,mean)
+            msg = "v{:.1f} ^{:.1f} ~{:.1f}".format(min,max,mean)
+            self.showMessage(None, msg)
+            optionName = self.getSelectedOption(options)
+            if optionName=="return":
+                break               
 
     def test(self, action):
         """Test an action"""
@@ -548,7 +592,7 @@ menu = {
             "main/menu/test": ["return", "moves1", "moves2", "sensors", "."],
             "main/menu/test/moves1": ["return", "forward", "backward", "left", "right"],
             "main/menu/test/moves2": ["return", "unwind", "point", "eat", "sit"],
-            "main/menu/test/sensors": ["return", "lidar", ".", ".", "."],
+            "main/menu/test/sensors": ["return", "dist", "antennae", "thermal", "."],
 
 
             "main/menu/test/moves1/forward": "test('F')",
@@ -561,7 +605,9 @@ menu = {
             "main/menu/test/moves2/eat": "test('E')",
             "main/menu/test/moves2/sit": "test('S')",
 
-            "main/menu/test/sensors/lidar": "testLidar()",
+            "main/menu/test/sensors/dist": "testDistanceSensor()",
+            "main/menu/test/sensors/thermal": "testThermalSensor()",
+            "main/menu/test/sensors/antennae": "testAntennae()",
 
             "main/menu/freset" : "factoryReset()"
         }
