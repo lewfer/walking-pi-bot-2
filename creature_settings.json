@@ -1,0 +1,1 @@
+{"leg_ranges": [{"left": {"hip": [130, 90, 50], "knee": [66, 96, 115]}, "right": {"hip": [50, 90, 130], "knee": [113, 81, 65]}}], "TURTLEREACHSPEED": 1, "TURTLEPUSHSPEED": 1, "TURTLEPUSHDELAY": 0, "RANDOMWAIT": 2, "STEPSPERDEGREE": 1}
