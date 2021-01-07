@@ -137,12 +137,21 @@ class Robot(Programmer):
 
 
     def detectMovementDo(self):
+        # Put in alert state
         self.crawler.alert()
+
+        tracking = False
+
         while True:
-            movement = self.head.detectMovement()
-            if movement>80: #!!param
-                self.timerAction = 'T'
-                self.timerDelay = 0
+            if tracking:
+                self.head.trackMovement()
+            else:
+                # Detect movement
+                movement = self.head.detectMovement()
+                if movement>80: #!!param
+                    print("Movement",movement,"so start tracking")
+                    self.setTimer(10, self.timerAction) # delay the next action
+                    tracking = True
 
             # If request was made to end , break out of loop
             if self.crawler.stopped:
@@ -150,21 +159,7 @@ class Robot(Programmer):
                 break         
 
             sleep(0.2)           
-
-    def trackMovementDo(self):
-        self.crawler.alert()
-        while True:
-            movement = self.head.trackMovement()
-            if movement>80: #!!param
-                self.timerAction = 'T'
-                self.timerDelay = 0
-
-            # If request was made to end , break out of loop
-            if self.crawler.stopped:
-                #self.log.info("Stopped detect movement")
-                break         
-
-            sleep(0.2)              
+         
 
 
 
@@ -295,7 +290,7 @@ class Robot(Programmer):
 
             elif self.interruptId=="heat":
                 self.detectMovement()
-                self.setTimer(10, 'I') # !!turn time
+                self.setTimer(10, 'I') # !!turn time 
 
 
     # Sensors

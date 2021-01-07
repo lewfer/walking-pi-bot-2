@@ -38,9 +38,9 @@ class Head:
 
         col = hotspot[1]
         
-        self.thermalSensor.print(matrix, 0)
-        print(colmeans)
-        print(col)
+        #self.thermalSensor.print(matrix, 0)
+        #print(colmeans)
+        #print(col)
 
         if col>=5:
             self.joint.moveRelativeToCurrent(-10, 0)
@@ -51,14 +51,14 @@ class Head:
         matrix = self.thermalSensor.readMatrix()
         min,max,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
         movement = self.thermalSensor.movement()
-        print(movement)
+        #print(movement)
         return movement
 
 
     def move(self, amount):
         """Move head from -100 (left) to +100 (right)"""
         newAngle = remap(amount,-100,100,self.joint.lowAngle,self.joint.highAngle)
-        print(newAngle)
+        #print(newAngle)
         self.joint.moveTo(newAngle, 0)
 
     def startSensors(self):
