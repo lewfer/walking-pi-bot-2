@@ -141,7 +141,7 @@ class Joint():
     def moveRelativeToMid(self, deltaAngle, secs):
         '''Move relative to mid angle.  delta can be positive or negative'''
         newAngle = self._limitedAngle(self.midAngle+deltaAngle)
-        print(newAngle)
+        #print(newAngle)
         self.moveTo(newAngle, secs)
 
     def moveRelativeToLow(self, deltaAngle, secs):

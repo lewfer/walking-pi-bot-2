@@ -101,8 +101,8 @@ class Crawler(Animal):
             if self.stopped:
                 break  
 
-    def leftTurtle(self):
-        '''Move left in a turtle motion'''
+    def rightTurtle(self):
+        '''Move right in a turtle motion'''
                 
         self.stopped = False
 
@@ -127,8 +127,8 @@ class Crawler(Animal):
             if self.stopped:
                 break  
 
-    def rightTurtle(self):
-        '''Move right in a turtle motion'''
+    def leftTurtle(self):
+        '''Move left in a turtle motion'''
                 
         self.stopped = False
 

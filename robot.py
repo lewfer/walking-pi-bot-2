@@ -10,11 +10,11 @@ The robot will start its default behaviour (call to start()) but can be stopped 
 # Imports
 # -------------------------------------------------------------------------------------------------
 from crawler import *
+from head import Head
 from programmer import *
 from time import sleep
-from distance_tf_mini import DistanceSensor
-from thermal_amg88xx import ThermalSensor
 from gpiozero import Button
+from random import randint
 
 class Robot(Programmer):
 
@@ -24,14 +24,7 @@ class Robot(Programmer):
         # Create an animal with 2 legs
         self.crawler = Crawler()
 
-        # Distance sensor
-        self.distanceSensor = DistanceSensor(14)
-        self.distanceSensorThread = None
-        self.pauseDistanceSensor = False
-        self.runningDistanceSensor = False
-
-        # Thermal sensor
-        self.thermalSensor = ThermalSensor()
+        self.head = Head(self.interrupt)
 
         # Antennae
         self.leftAntenna = Button(6)
@@ -49,6 +42,8 @@ class Robot(Programmer):
         self.timerDelay = 0             # delay before next action runs
         self.timerAction = None         # action to run next (one-letter code)
         self.timerAgeStart = 0          # age of robot when timer was started
+        self.interruptId = None         # the current interrupt, if any
+        self.interruptBeingHandled = None   # if we are currently executing the interrupt handling action
 
         # Random action generator
         self.randomThread = None        # thread on which random action generator runs
@@ -73,15 +68,23 @@ class Robot(Programmer):
             'S':'self.sit()',
             '^':'self.high()',
             'v':'self.low()',
-            'A':'self.alert()'
+            'A':'self.alert()',
+            'I':'self.endInterrupt()',
+            'M':'self.detectMovement()',
+            'T':'self.trackMovement()'
             }
 
     # Handlers for actions 
     # ---------------------------------------------------------------------------------------------
 
+    def endInterrupt(self):
+        self.interruptId = None
+        self.interruptBeingHandled = False
+        self.forward()
+
     def forward(self):
         self.handleAction(self.crawler.forwardTurtle, "F")
-        self.pauseDistanceSensor = False # turn DistanceSensor back on for moving forwards
+        self.head.unPauseSensors()   # turn sensors back on for moving forwards
 
     def backward(self):
         self.handleAction(self.crawler.backwardTurtle, "B")
@@ -116,6 +119,12 @@ class Robot(Programmer):
     def alert(self):
         self.handleAction(self.crawler.alert, "A")
 
+    def detectMovement(self):
+        self.handleAction(self.detectMovementDo, "M")
+
+    def trackMovement(self):
+        self.handleAction(self.trackMovementDo, "T")
+
     def handleAction(self, func, msg):  
         """Stop any current action and start a new one"""
         self.crawler.stop()
@@ -125,6 +134,39 @@ class Robot(Programmer):
             self.actionThread = Thread(target=func)
             self.actionThread.start()   
         self.currentAction = msg
+
+
+    def detectMovementDo(self):
+        self.crawler.alert()
+        while True:
+            movement = self.head.detectMovement()
+            if movement>80: #!!param
+                self.timerAction = 'T'
+                self.timerDelay = 0
+
+            # If request was made to end , break out of loop
+            if self.crawler.stopped:
+                #self.log.info("Stopped detect movement")
+                break         
+
+            sleep(0.2)           
+
+    def trackMovementDo(self):
+        self.crawler.alert()
+        while True:
+            movement = self.head.trackMovement()
+            if movement>80: #!!param
+                self.timerAction = 'T'
+                self.timerDelay = 0
+
+            # If request was made to end , break out of loop
+            if self.crawler.stopped:
+                #self.log.info("Stopped detect movement")
+                break         
+
+            sleep(0.2)              
+
+
 
 
     # Action management
@@ -140,7 +182,7 @@ class Robot(Programmer):
         self.timerDelay = delay
         self.timerAction = action
 
-    def exectuteTimer(self):
+    def executeTimer(self):
         #!!surely need to stop previous action?
         exec(self.actionFunction[self.timerAction])
         self.timerAction = None
@@ -149,16 +191,15 @@ class Robot(Programmer):
 
     def start(self):
         """Start the robot"""
-        self.pauseDistanceSensor = False
         self.forward()
-        self.startDistanceSensor()
+        self.head.startSensors()
         self.startRandom()
 
     def stop(self):
         """Stop the robot"""
         self.showMessage("Stopping","")
         self.handleAction(None, "W")
-        self.runningDistanceSensor = False
+        self.head.stopSensors()
         self.runningRandom = False
 
     def startRandom(self):
@@ -173,7 +214,11 @@ class Robot(Programmer):
             if self.timerAction is not None:
                 if self.age-self.timerAgeStart >= self.timerDelay:
                     # There is a timer that has come of age, so execute it
-                    self.exectuteTimer()
+                    self.executeTimer()
+                    continue
+
+            if self.interruptId is not None:
+                self.handleInterrupt()
             elif self.age % 5 == 0: #!!every 5 seconds
                 # No timer, so allow another random, weighted choice
                 actions = ['F','S','B','L','R','U','P','E','A']
@@ -194,7 +239,6 @@ class Robot(Programmer):
                     self.setTimer(random.randint(2, 30), 'F') #!! rest min/max parameters
                 elif choice=='U' and self.alertness < 100:
                     # These actions can run for a long period
-                    print("Unwind")
                     self.unwind()
                     self.setTimer(random.randint(3, 50), 'F') #!! rest min/max parameters
 
@@ -213,43 +257,55 @@ class Robot(Programmer):
 
     def _printStatus(self):
         """Print out the status for debugging"""
-        print("{} al={} en={} td={} th={}".format(self.currentAction, self.alertness, self.energy, (self.timerAction, self.timerDelay), activeCount()))
-        self.showMessage(self.actionFunction[self.currentAction],self.actionFunction[self.timerAction] if self.timerAction is not None else "")
+        print("{} alertness={} energy={} timernext={}_in_{}s threadcount={}".format(self.currentAction, self.alertness, self.energy, self.timerAction, self.timerDelay, activeCount()))
+        if self.interruptId is None:
+            self.showMessage(self.actionFunction[self.currentAction],self.actionFunction[self.timerAction] if self.timerAction is not None else "")
+        else:
+            self.showMessage("Interrupt",self.interruptId)
 
 
-    """
-    def handleInterrupt(self, interrupt, value):
-        print("Interrupt", interrupt, value)
-        if interrupt=="distance":
-            self.backward()
-            Timer(10, self.forward()).start()"""
-        
+    # Interrupt handling
+    # ---------------------------------------------------------------------------------------------
+    def interrupt(self, id):
+
+        # Don't allow interrupt to be interrupted
+        if self.interruptId is not None:
+            return
+
+        print("Interrupt",id)            
+
+        self.interruptId = id
+
+    def handleInterrupt(self):
+        # Handle the interrupt
+        if not self.interruptBeingHandled:
+            print("Handle Interrupt")
+            self.interruptBeingHandled = True
+            if self.interruptId=="short-distance":
+                self.backward()
+                self.setTimer(10, 'I') # !!turn time
+
+            elif self.interruptId=="left-antenna":
+                self.right()
+                self.setTimer(10, 'I') # !!turn time
+
+            elif self.interruptId=="right-antenna":
+                self.left()
+                self.setTimer(10, 'I') # !!turn time
+
+            elif self.interruptId=="heat":
+                self.detectMovement()
+                self.setTimer(10, 'I') # !!turn time
+
 
     # Sensors
     # ---------------------------------------------------------------------------------------------
 
-    def startDistanceSensor(self):
-        self.distanceSensorThread = Thread(target=self.runDistanceSensor)
-        self.distanceSensorThread.start() 
-
-    def runDistanceSensor(self):
-        self.runningDistanceSensor = True
-        while self.runningDistanceSensor:
-            if not self.pauseDistanceSensor:
-                dist = self.distanceSensor.readCm()
-                #print(dist)
-                if dist < 10 and dist > 1: # sometimes readings of 1 come in error # !!dist
-                    print("Interrupt distance", dist)
-                    self.backward()
-                    self.setTimer(10, 'F') # !!turn time
-                    self.pauseDistanceSensor = True
-            sleep(0.1)
-
     def leftAntennaPressed(self):
-        pass
+        self.interrupt("left-antenna")
 
     def rightAntennaPressed(self):
-        pass
+            self.interrupt("right-antenna")
 
 
 
@@ -507,7 +563,7 @@ class Robot(Programmer):
         self.showOptions(options)
         self.showMessage("DistanceSensor", None)
         while True:
-            self.showMessage(None, str(self.distanceSensor.readCm()))
+            self.showMessage(None, str(self.head.distanceSensor.readCm()))
             optionName = self.getSelectedOption(options)
             if optionName=="return":
                 break   
@@ -528,14 +584,49 @@ class Robot(Programmer):
         self.showOptions(options)
         self.showMessage("ThermalSensor", None)
         while True:
-            matrix = self.thermalSensor.readMatrix()
-            min,max,mean = self.thermalSensor.minMaxMeanTemperature(matrix)
-            print(min,max,mean)
-            msg = "v{:.1f} ^{:.1f} ~{:.1f}".format(min,max,mean)
+            matrix = self.head.thermalSensor.readMatrix()
+            min,max,mean,rowmeans,colmeans,hotspot = self.head.thermalSensor.summarise()
+            print(round(min,1),round(max,1),round(mean,1),hotspot)
+            msg = "{:.0f} {:.0f} {:.0f} {}".format(min,max,mean,hotspot[1])
             self.showMessage(None, msg)
             optionName = self.getSelectedOption(options)
             if optionName=="return":
                 break               
+
+    def testHeadMovements(self):
+        """Move between left, mid, right"""
+        options = ["return",".",".",".","."]
+        self.showOptions(options)
+        self.showMessage("Head move", None)
+        position = -100
+        while True:
+            # Move head
+            #position = randint(-100,100)
+            self.showMessage(None, str(position))
+            self.head.move(position)
+            sleep(2)
+            position += 100
+            if position==200: position=-100
+
+            optionName = self.getSelectedOption(options)
+            if optionName=="return":
+                break           
+
+    def testTrackMovements(self):
+        """Follow heat with head"""
+        options = ["return",".",".",".","."]
+        self.showOptions(options)
+        self.showMessage("Head follow heat", None)
+        position = -100
+        while True:
+            self.showMessage(None, str(position))
+            self.head.trackMovement()
+
+            optionName = self.getSelectedOption(options)
+            if optionName=="return":
+                break          
+
+        
 
     def test(self, action):
         """Test an action"""
@@ -589,10 +680,11 @@ menu = {
 
             "main/menu/90d": "set90Degrees()",
 
-            "main/menu/test": ["return", "moves1", "moves2", "sensors", "."],
+            "main/menu/test": ["return", "moves1", "moves2", "sensors", "head"],
             "main/menu/test/moves1": ["return", "forward", "backward", "left", "right"],
             "main/menu/test/moves2": ["return", "unwind", "point", "eat", "sit"],
             "main/menu/test/sensors": ["return", "dist", "antennae", "thermal", "."],
+            "main/menu/test/head": ["return","move","heat",".","."],
 
 
             "main/menu/test/moves1/forward": "test('F')",
@@ -608,6 +700,10 @@ menu = {
             "main/menu/test/sensors/dist": "testDistanceSensor()",
             "main/menu/test/sensors/thermal": "testThermalSensor()",
             "main/menu/test/sensors/antennae": "testAntennae()",
+
+            "main/menu/test/head/move": "testHeadMovements()",
+            "main/menu/test/head/heat": "testTrackMovements()",
+
 
             "main/menu/freset" : "factoryReset()"
         }
