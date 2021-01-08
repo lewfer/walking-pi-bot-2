@@ -3,18 +3,14 @@ robot.py
 
 Code for a crawling robot.
 
-Combines the functionality of Crawler and Programmer to provide a crawling robot with the ability to control it using a programmer.
+Combines the functionality of Turtle and Programmer to provide a crawling robot with the ability to control it using a programmer.
 The robot will start its default behaviour (call to start()) but can be stopped and programmed.
 """
 
 # Imports
 # -------------------------------------------------------------------------------------------------
-from crawler import *
-from head import Head
+from turtle import *
 from programmer import *
-from time import sleep
-from gpiozero import Button
-from random import randint
 
 class Robot(Programmer):
 
@@ -22,293 +18,18 @@ class Robot(Programmer):
         Programmer.__init__(self, menu)   
 
         # Create an animal with 2 legs
-        self.crawler = Crawler()
-
-        self.head = Head(self.interrupt)
-
-        # Antennae
-        self.leftAntenna = Button(6)
-        self.rightAntenna = Button(12)
-        self.antennaeThread = None
-        self.leftAntenna.when_pressed = self.leftAntennaPressed
-        self.rightAntenna.when_pressed = self.rightAntennaPressed
+        self.animal = Turtle()
 
         # Adjust parameter between 0.5 (fast) and 6 (slow) to change speed of movement
-        self.crawler.setStepsPerDegree(self.crawler.settings['STEPSPERDEGREE'])
+        self.animal.setStepsPerDegree(self.animal.settings['STEPSPERDEGREE'])
 
-        # Manage current and next action
-        self.currentAction = None       # current action being run (one-letter code)
-        self.actionThread = None        # thread on which current action is running
-        self.timerDelay = 0             # delay before next action runs
-        self.timerAction = None         # action to run next (one-letter code)
-        self.timerAgeStart = 0          # age of robot when timer was started
-        self.interruptId = None         # the current interrupt, if any
-        self.interruptBeingHandled = None   # if we are currently executing the interrupt handling action
-
-        # Random action generator
-        self.randomThread = None        # thread on which random action generator runs
-        self.runningRandom = False      # flag to indicate that random thread is running
-
-        # Robot health
-        # Can use these to determine behaviour, e.g. slowing down as energy drops
-        self.alertness = 120
-        self.energy = 1000
-        self.age = 0
-
-        # List of one-letter action codes and the associated actions
-        self.actionFunction = {
-            'F':'self.forward()', 
-            'B':'self.backward()',
-            'L':'self.left()',
-            'R':'self.right()',
-            'W':'self.wait()',
-            'U':'self.unwind()',
-            'P':'self.point()',
-            'E':'self.eat()',
-            'S':'self.sit()',
-            '^':'self.high()',
-            'v':'self.low()',
-            'A':'self.alert()',
-            'I':'self.endInterrupt()',
-            'M':'self.detectMovement()',
-            'T':'self.trackMovement()'
-            }
-
-    # Handlers for actions 
-    # ---------------------------------------------------------------------------------------------
-
-    def endInterrupt(self):
-        self.interruptId = None
-        self.interruptBeingHandled = False
-        self.forward()
-
-    def forward(self):
-        self.handleAction(self.crawler.forwardTurtle, "F")
-        self.head.unPauseSensors()   # turn sensors back on for moving forwards
-
-    def backward(self):
-        self.handleAction(self.crawler.backwardTurtle, "B")
-
-    def left(self):
-        self.handleAction(self.crawler.leftTurtle, "L")
-
-    def right(self):
-        self.handleAction(self.crawler.rightTurtle, "R")
-
-    def wait(self):
-        self.handleAction(None, "W")
-
-    def unwind(self):
-        self.handleAction(self.crawler.unwind, "U")
-
-    def point(self):
-        self.handleAction(self.crawler.point, "P")
-
-    def eat(self):
-        self.handleAction(self.crawler.eat, "E")
-
-    def sit(self):
-        self.handleAction(self.crawler.sit, "S")
-
-    def high(self):
-        self.handleAction(self.crawler.high, "^")
-
-    def low(self):
-        self.handleAction(self.crawler.low, "v")
-
-    def alert(self):
-        self.handleAction(self.crawler.alert, "A")
-
-    def detectMovement(self):
-        self.handleAction(self.detectMovementDo, "M")
-
-    def trackMovement(self):
-        self.handleAction(self.trackMovementDo, "T")
-
-    def handleAction(self, func, msg):  
-        """Stop any current action and start a new one"""
-        self.crawler.stop()
-        if self.actionThread: self.actionThread.join()
-        print(msg)
-        if func is not None:
-            self.actionThread = Thread(target=func)
-            self.actionThread.start()   
-        self.currentAction = msg
+        self.animal.messageCallback = self.messageCallback
 
 
-    def detectMovementDo(self):
-        # Put in alert state
-        self.crawler.alert()
+    def messageCallback(self, line1, line2):
+        """Receives messages from the animal"""
+        self.showMessage(line1, line2)
 
-        tracking = False
-
-        while True:
-            if tracking:
-                self.head.trackMovement()
-            else:
-                # Detect movement
-                movement = self.head.detectMovement()
-                if movement>80: #!!param
-                    print("Movement",movement,"so start tracking")
-                    self.setTimer(10, self.timerAction) # delay the next action
-                    tracking = True
-
-            # If request was made to end , break out of loop
-            if self.crawler.stopped:
-                #self.log.info("Stopped detect movement")
-                break         
-
-            sleep(0.2)           
-         
-
-
-
-
-    # Action management
-    # ---------------------------------------------------------------------------------------------
-
-    def setTimer(self, delay, action):
-        """Cancel any existing timer and replace with this one.  Timers are used to """
-        #if self.timer is not None:
-        #    self.timer.cancel()
-        self.timerAgeStart = self.age
-        #self.timer = Timer(delay, self.actionFunction[action])
-        #self.timer.start()
-        self.timerDelay = delay
-        self.timerAction = action
-
-    def executeTimer(self):
-        #!!surely need to stop previous action?
-        exec(self.actionFunction[self.timerAction])
-        self.timerAction = None
-        self.timerDelay = 0
-        self.timerAgeStart = 0
-
-    def start(self):
-        """Start the robot"""
-        self.forward()
-        self.head.startSensors()
-        self.startRandom()
-
-    def stop(self):
-        """Stop the robot"""
-        self.showMessage("Stopping","")
-        self.handleAction(None, "W")
-        self.head.stopSensors()
-        self.runningRandom = False
-
-    def startRandom(self):
-        """Start a random behaviour interrupt generator"""
-        self.randomThread = Thread(target=self._runRandom)
-        self.randomThread.start() 
-
-    def _runRandom(self):
-        """Continue to run random actions until stopped"""
-        self.runningRandom = True
-        while self.runningRandom:
-            if self.timerAction is not None:
-                if self.age-self.timerAgeStart >= self.timerDelay:
-                    # There is a timer that has come of age, so execute it
-                    self.executeTimer()
-                    continue
-
-            if self.interruptId is not None:
-                self.handleInterrupt()
-            elif self.age % 5 == 0: #!!every 5 seconds
-                # No timer, so allow another random, weighted choice
-                actions = ['F','S','B','L','R','U','P','E','A']
-                weights = [ 40, 10, 1,  3,  3,  2,  2,  1,  1] # !! weights parameters
-                #weights = [20,0,0,0,0] # !! weights
-                choice = random.choices(actions, weights)[0]
-                print("random",choice, "-", end="")
-
-                # Start the choice, and set a timer to start moving forward again after a random period
-                #self.handleInterrupt("random", 0)
-                if choice in ['L','R']:
-                    # These actions can run for a short period
-                    exec(self.actionFunction[choice])
-                    self.setTimer(random.randint(2, 15), 'F') #!! rest min/max parameters
-                elif choice in ['S','P','E','A']:
-                    # These actions can run for a medium period
-                    exec(self.actionFunction[choice])
-                    self.setTimer(random.randint(2, 30), 'F') #!! rest min/max parameters
-                elif choice=='U' and self.alertness < 100:
-                    # These actions can run for a long period
-                    self.unwind()
-                    self.setTimer(random.randint(3, 50), 'F') #!! rest min/max parameters
-
-            sleep(1)
-
-            # Adjust alertness
-            if self.currentAction=='U':
-                self.alertness += 5
-            else:
-                self.alertness -= 1
-
-            # djust age
-            self.age += 1
-
-            self._printStatus()
-
-    def _printStatus(self):
-        """Print out the status for debugging"""
-        print("{} alertness={} energy={} timernext={}_in_{}s threadcount={}".format(self.currentAction, self.alertness, self.energy, self.timerAction, self.timerDelay, activeCount()))
-        if self.interruptId is None:
-            self.showMessage(self.actionFunction[self.currentAction],self.actionFunction[self.timerAction] if self.timerAction is not None else "")
-        else:
-            self.showMessage("Interrupt",self.interruptId)
-
-
-    # Interrupt handling
-    # ---------------------------------------------------------------------------------------------
-    def interrupt(self, id):
-
-        # Don't allow interrupt to be interrupted
-        if self.interruptId is not None:
-            return
-
-        print("Interrupt",id)            
-
-        self.interruptId = id
-
-    def handleInterrupt(self):
-        # Handle the interrupt
-        if not self.interruptBeingHandled:
-            print("Handle Interrupt")
-            self.interruptBeingHandled = True
-            if self.interruptId=="short-distance":
-                self.backward()
-                self.setTimer(10, 'I') # !!turn time
-
-            elif self.interruptId=="left-antenna":
-                self.right()
-                self.setTimer(10, 'I') # !!turn time
-
-            elif self.interruptId=="right-antenna":
-                self.left()
-                self.setTimer(10, 'I') # !!turn time
-
-            elif self.interruptId=="heat":
-                self.detectMovement()
-                self.setTimer(10, 'I') # !!turn time 
-
-
-    # Sensors
-    # ---------------------------------------------------------------------------------------------
-
-    def leftAntennaPressed(self):
-        self.interrupt("left-antenna")
-
-    def rightAntennaPressed(self):
-            self.interrupt("right-antenna")
-
-
-
-    """
-    def waitForStop(self):  
-        self.showMessage("Stopping","")
-        self.crawler.stop()
-        if self.actionThread: self.actionThread.join()"""
 
     # Calibration
     # ---------------------------------------------------------------------------------------------
@@ -316,22 +37,22 @@ class Robot(Programmer):
     def calibrateLeftHip(self):
         print("Calibrate left hip mid position")
         legPair = 0
-        self.calibrateJointMid(self.crawler.legPairs[legPair].left.hip, self.crawler.settings["leg_ranges"][legPair]["left"]["hip"], "L hip")
+        self.calibrateJointMid(self.animal.legPairs[legPair].left.hip, self.animal.settings["leg_ranges"][legPair]["left"]["hip"], "L hip")
 
     def calibrateLeftKnee(self):
         print("Calibrate left knee position")
         legPair = 0
-        self.calibrateJointMid(self.crawler.legPairs[legPair].left.knee, self.crawler.settings["leg_ranges"][legPair]["left"]["knee"], "L knee")
+        self.calibrateJointMid(self.animal.legPairs[legPair].left.knee, self.animal.settings["leg_ranges"][legPair]["left"]["knee"], "L knee")
 
     def calibrateRightHip(self):
         print("Calibrate right hip position")
         legPair = 0
-        self.calibrateJointMid(self.crawler.legPairs[legPair].right.hip, self.crawler.settings["leg_ranges"][legPair]["right"]["hip"], "R hip")
+        self.calibrateJointMid(self.animal.legPairs[legPair].right.hip, self.animal.settings["leg_ranges"][legPair]["right"]["hip"], "R hip")
 
     def calibrateRightKnee(self):
         print("Calibrate right knee position")        
         legPair = 0
-        self.calibrateJointMid(self.crawler.legPairs[legPair].right.knee, self.crawler.settings["leg_ranges"][legPair]["right"]["knee"], "R knee")
+        self.calibrateJointMid(self.animal.legPairs[legPair].right.knee, self.animal.settings["leg_ranges"][legPair]["right"]["knee"], "R knee")
 
     def calibrateHipsFront(self):
         print("Calibrate hips front position")
@@ -360,8 +81,8 @@ class Robot(Programmer):
         self.showOptions(options)
 
         # Move joints to current position being calibrated
-        left = self.crawler.legPairs[legPair].left
-        right = self.crawler.legPairs[legPair].right
+        left = self.animal.legPairs[legPair].left
+        right = self.animal.legPairs[legPair].right
         left.setHipPos(pos)
         right.setHipPos(pos)
 
@@ -393,9 +114,9 @@ class Robot(Programmer):
                 left.nudgeHip(self.rotaryAction)
                 right.nudgeHip(self.rotaryAction)
             elif optionName=="save":
-                self.crawler.settings["leg_ranges"][legPair]["left"]["hip"][pos] = int(left.hip._angle)
-                self.crawler.settings["leg_ranges"][legPair]["right"]["hip"][pos] = int(right.hip._angle)
-                self.crawler.storeSettings()     
+                self.animal.settings["leg_ranges"][legPair]["left"]["hip"][pos] = int(left.hip._angle)
+                self.animal.settings["leg_ranges"][legPair]["right"]["hip"][pos] = int(right.hip._angle)
+                self.animal.storeSettings()     
                 self.showMessage("Saved",name)
                 sleep(2)                
                 break
@@ -421,8 +142,8 @@ class Robot(Programmer):
         self.showOptions(options)
 
         # Move joints to current position being calibrated
-        left = self.crawler.legPairs[legPair].left
-        right = self.crawler.legPairs[legPair].right
+        left = self.animal.legPairs[legPair].left
+        right = self.animal.legPairs[legPair].right
         left.setKneePos(pos)
         right.setKneePos(pos)
 
@@ -454,9 +175,9 @@ class Robot(Programmer):
                 left.nudgeKnee(self.rotaryAction)
                 right.nudgeKnee(self.rotaryAction)
             elif optionName=="save":
-                self.crawler.settings["leg_ranges"][legPair]["left"]["knee"][pos] = int(left.knee._angle)
-                self.crawler.settings["leg_ranges"][legPair]["right"]["knee"][pos] = int(right.knee._angle)
-                self.crawler.storeSettings()     
+                self.animal.settings["leg_ranges"][legPair]["left"]["knee"][pos] = int(left.knee._angle)
+                self.animal.settings["leg_ranges"][legPair]["right"]["knee"][pos] = int(right.knee._angle)
+                self.animal.storeSettings()     
                 self.showMessage("Saved",name)
                 sleep(2)                
                 break
@@ -513,7 +234,7 @@ class Robot(Programmer):
                 joint.nudge(self.rotaryAction)
             elif optionName=="save":
                 setting[LEG_MID] = int(joint._angle)
-                self.crawler.storeSettings()     
+                self.animal.storeSettings()     
                 self.showMessage("Saved",name)
                 sleep(2)                
                 break
@@ -538,14 +259,14 @@ class Robot(Programmer):
         '''Set all motors to 90 degrees'''
         self.showMessage("Setting to 90","degrees")
         sleep(1)
-        self.crawler.legPairs[0].left.knee.moveDirectTo(90)
-        self.crawler.legPairs[0].left.hip.moveDirectTo(90)
-        self.crawler.legPairs[0].right.knee.moveDirectTo(90)
-        self.crawler.legPairs[0].right.hip.moveDirectTo(90)
+        self.animal.legPairs[0].left.knee.moveDirectTo(90)
+        self.animal.legPairs[0].left.hip.moveDirectTo(90)
+        self.animal.legPairs[0].right.knee.moveDirectTo(90)
+        self.animal.legPairs[0].right.hip.moveDirectTo(90)
 
     def factoryReset(self):
         if self.yesNo("Factory Reset?"):
-            self.crawler.factoryReset()
+            self.animal.factoryReset()
             self.showMessage("Settings reset","")
             sleep(2)     
 
@@ -558,7 +279,7 @@ class Robot(Programmer):
         self.showOptions(options)
         self.showMessage("DistanceSensor", None)
         while True:
-            self.showMessage(None, str(self.head.distanceSensor.readCm()))
+            self.showMessage(None, str(self.animal.head.distanceSensor.readCm()))
             optionName = self.getSelectedOption(options)
             if optionName=="return":
                 break   
@@ -568,7 +289,7 @@ class Robot(Programmer):
         self.showOptions(options)
         self.showMessage("Antennae", None)
         while True:
-            msg = "{} - {}".format(self.leftAntenna.is_pressed, self.rightAntenna.is_pressed)
+            msg = "{} - {}".format(self.animal.leftAntenna.is_pressed, self.animal.rightAntenna.is_pressed)
             self.showMessage(None, msg)
             optionName = self.getSelectedOption(options)
             if optionName=="return":
@@ -579,8 +300,8 @@ class Robot(Programmer):
         self.showOptions(options)
         self.showMessage("ThermalSensor", None)
         while True:
-            matrix = self.head.thermalSensor.readMatrix()
-            min,max,mean,rowmeans,colmeans,hotspot = self.head.thermalSensor.summarise()
+            matrix = self.animal.head.thermalSensor.readMatrix()
+            min,max,mean,rowmeans,colmeans,hotspot = self.animal.head.thermalSensor.summarise()
             print(round(min,1),round(max,1),round(mean,1),hotspot)
             msg = "{:.0f} {:.0f} {:.0f} {}".format(min,max,mean,hotspot[1])
             self.showMessage(None, msg)
@@ -598,7 +319,7 @@ class Robot(Programmer):
             # Move head
             #position = randint(-100,100)
             self.showMessage(None, str(position))
-            self.head.move(position)
+            self.animal.head.move(position)
             sleep(2)
             position += 100
             if position==200: position=-100
@@ -615,7 +336,7 @@ class Robot(Programmer):
         position = -100
         while True:
             self.showMessage(None, str(position))
-            self.head.trackMovement()
+            self.animal.head.trackMovement()
 
             optionName = self.getSelectedOption(options)
             if optionName=="return":
@@ -631,18 +352,18 @@ class Robot(Programmer):
         self.showOptions(options)
 
         # Start the action off
-        exec(self.actionFunction[action])
+        exec("self.animal."+self.animal.actionFunction[action])
 
         # Wait for return or done to be pressed
         while True:
-            self.showOptions(options, self.actionFunction[action])
+            self.showOptions(options, self.animal.actionFunction[action])
             optionName = self.getSelectedOption(options)
             if optionName=="return" or optionName=="done":
                 break
             sleep(0.2)
 
         # Wait for action to complete before returning
-        self.wait()
+        self.animal.do_wait()
 
 
 # Main program
@@ -652,8 +373,8 @@ class Robot(Programmer):
 menu = {
             "main" : ["stop", "menu", ".", ".", "start"],
 
-            "main/stop" : "stop()",
-            "main/start" : "start()",
+            "main/stop" : "animal.stop()",
+            "main/start" : "animal.start()",
 
             "main/menu":["return", "calibrate", "90d", "test", "freset"],
             

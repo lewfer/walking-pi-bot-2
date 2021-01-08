@@ -1,7 +1,6 @@
 import RPi_I2C_driver
 from time import sleep
 from gpiozero import Button
-from crawler import *
 from rotary_encoder import RotaryEncoder
 
 class Programmer():
