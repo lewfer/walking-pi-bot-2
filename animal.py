@@ -54,6 +54,7 @@ class Animal():
         self.timerAction = None         # action to run next (one-letter code)
         self.timerAgeStart = 0          # age of robot when timer was started
         self.interruptId = None         # the current interrupt, if any
+        self.interruptValue = None      # value associated with the interrupt
         self.interruptBeingHandled = None   # if we are currently executing the interrupt handling action
 
         # Random action generator
@@ -104,6 +105,8 @@ class Animal():
             '<':'do_hipsbackward()',
             '>':'do_hipsforward()',
             'A':'do_alert()',
+            '+':'do_run()',
+            '-':'do_crawl()',
             'I':'endInterrupt()',
             'M':'do_detectMovement()',
             'T':'do_trackHotspot()'
@@ -130,11 +133,11 @@ class Animal():
         self.settings['STEPSPERDEGREE'] = 1
 
         # Weights for random movement action choices
-        #                                 ['F','S','B','L','R','U','P','E','A']
-        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  2,  1,  1]
+        #                                 ['F','S','B','L','R','U','P','E','A','+','-']
+        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  2,  1,  1,  20,  1]
 
         # Min/max time for action to run
-        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,15],'R':[2,15],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[5,10]}
+        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,15],'R':[2,15],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[5,10],'+':[2,10],'-':[2,10]}
 
         # Number of seconds to wait before generating another random action
         self.settings['TICKPERIOD'] = 1
@@ -152,6 +155,7 @@ class Animal():
 
         # Sensor thresholds
         self.settings['SHORTDISTANCE'] = 10     # triggers short-distance interrupt when distance less than this
+        self.settings['LONGDISTANCE'] = 200     # triggers long-distance interrupt when distance more than this
         self.settings['HEATDETECT'] = 26        # triggers heat-detect interrupt when head more than this
 
 
@@ -228,8 +232,7 @@ class Animal():
     # ---------------------------------------------------------------------------------------------
 
     def endInterrupt(self):
-        self.interruptId = None
-        self.interruptBeingHandled = False
+        self.clearInterrupt()
         self.do_forward()
 
 
@@ -282,6 +285,12 @@ class Animal():
     def do_trackHotspot(self):
         self.handleAction(self.trackHotspot, "T")
     
+    def do_run(self):
+        self.handleAction(self.run, "+")
+
+    def do_crawl(self):
+        self.handleAction(self.crawl, "-")
+
 
     # Action management
     # ---------------------------------------------------------------------------------------------
@@ -346,11 +355,21 @@ class Animal():
                 self.handleInterrupt()
             elif self.age % 5 == 0: #!!every 5 seconds
                 # No timer, so allow another random, weighted choice
-                actions = ['F','S','B','L','R','U','P','E','A']
+                actions = ['F','S','B','L','R','U','P','E','A','+','-']
                 weights = self.settings['RANDOMWEIGHTS']
                 choice = random.choices(actions, weights)[0]
                 self.log.info("random {}".format(choice))
 
+                # Don't allow run if not enough space
+                if choice=='+':
+                    if self.head.lastDistance is None:
+                        choice = 'F'
+                    elif self.head.lastDistance<200: #!!
+                        self.log.info("Not enough distance to run")
+                        choice = 'F'
+                    else:
+                        pass # !! set time proportional to last distance?
+                    
                 # Start the choice, and set a timer to start moving forward again after a random period
                 if choice != 'F':
                     self.log.info("Initiating action {}".format(choice))
@@ -374,7 +393,7 @@ class Animal():
 
     def _printStatus(self):
         """Print out the status for debugging"""
-        self.log.info("{} alertness={} energy={} timernext={}_in_{}s threadcount={} interrupt={}".format(self.currentAction, self.alertness, self.energy, self.timerAction, self.timerDelay, activeCount(), self.interruptId))
+        self.log.info("{} alertness={} energy={} timernext={}_in_{}s threadcount={} interrupt={} dist={}".format(self.currentAction, self.alertness, self.energy, self.timerAction, self.timerDelay, activeCount(), self.interruptId, self.head.lastDistance))
 
         if self.messageCallback is not None:   
             if self.interruptId is None:
@@ -391,7 +410,7 @@ class Animal():
 
     # Interrupt handling
     # ---------------------------------------------------------------------------------------------
-    def interrupt(self, id):
+    def interrupt(self, id, value):
 
         # Don't allow interrupt to be interrupted
         if self.interruptId is not None:
@@ -400,12 +419,14 @@ class Animal():
         self.log.info("Interrupt {}".format(id))            
 
         self.interruptId = id
+        self.interruptValue = value
 
     def handleInterrupt(self):
         # Handle the interrupt
         if not self.interruptBeingHandled:
             self.log.info("Handle Interrupt {}".format(self.interruptId))
             self.interruptBeingHandled = True
+
             if self.interruptId=="short-distance":
                 self.do_backward()
                 minmax = self.settings['RANDOMTIME']['B']   
@@ -426,6 +447,20 @@ class Animal():
                 minmax = self.settings['RANDOMTIME']['M']   
                 self.setTimer(random.randint(minmax[0],minmax[1]), 'I')    
 
+            elif self.interruptId=="long-distance":
+                self.clearInterrupt()
+                self.head.unPauseSensors()  
+            """
+                self.do_run()
+                #minmax = self.settings['RANDOMTIME']['R']
+                minmax[0] = 2
+                minmax[1] = self.interruptValue / 20 # run time proportional to distance measured
+                self.setTimer(random.randint(minmax[0],minmax[1]), 'I')
+            """
+
+    def clearInterrupt(self):
+        self.interruptId = None
+        self.interruptBeingHandled = False          
 
     # Sensors
     # ---------------------------------------------------------------------------------------------
@@ -526,7 +561,13 @@ class Animal():
         sleep(random.randint(0,self.settings['RANDOMWAIT'])/10.0) 
 
 
-    def forward(self):
+    def run(self):
+        self.forward(speed=2)
+
+    def crawl(self):
+        self.forward(speed=0.5)        
+
+    def forward(self, speed=1):
         '''Move forward'''
                 
         self.stopped = False
@@ -535,7 +576,7 @@ class Animal():
             # Move limbs forwards, one at a time
             # ----------------------------------
             
-            t = self.settings['REACHTIME']
+            t = self.settings['REACHTIME'] / speed
 
             # Move front limbs 
             self.runOnThread('L0', 'reachForward', {'t':t})
@@ -565,7 +606,7 @@ class Animal():
             # Move limbs backwards together
             # -----------------------------
 
-            t = self.settings['PUSHTIME']
+            t = self.settings['PUSHTIME'] / speed
 
             # Move front limbs 
             self.runOnThread('L0', 'pushBackward', {'t':t})
@@ -1093,20 +1134,24 @@ if __name__ == "__main__":
     animal.loadSettings()
 
     print("wakeSlowly(2)")
-    animal.wakeSlowly(5) 
-    sleep(2)
+    #animal.wakeSlowly(5) 
+    #sleep(2)
+
+    #animal.forward()
 
     # Run through all possible actions
+    """
     for func in animal.actionFunction.values():
         print(func)
         eval("animal."+func)
         sleep(5)
+    """
 
     
     # Run the animal in random mode
-    """
+
     print("Running animal")
     animal.start()
     while True:
         sleep(0.2)
-    """
+    

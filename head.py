@@ -27,18 +27,21 @@ class Head:
         self._distanceSensorThread = None
         self._pauseDistanceSensor = False
         self._runningDistanceSensor = False
+        self.lastDistance = None
 
         # Thermal sensor
         self.thermalSensor = ThermalSensor()
         self._pauseThermalSensor = False
         self._runningThermalSensor = False
+        self.lastMaxTemperature = None
 
         # Settings - can be overridden
         self.joint.midAngle = 90  
         self.joint.highAngle = 135   
         self.joint.lowAngle = 45        
         self.trackDelta = 10        # change in angle each iteration when tracking movement
-        self.shortDistance = 10     # distance in cm to obstacle that triggers a short-distance interrupt
+        self.shortDistance = 10     # distance in cm to obstacle below which triggers a short-distance interrupt
+        self.longDistance = 200     # distance in cm to obstacle above which triggers a long-distance interrupt
         self.heatDetect = 26        # temerature in C which triggers heat-detect interrupt
 
 
@@ -120,10 +123,14 @@ class Head:
         while self._runningDistanceSensor:
             if not self._pauseDistanceSensor:
                 dist = self.distanceSensor.readCm()
+                self.lastDistance = dist
                 #print("Dist",dist)
                 if dist < self.shortDistance and dist > 1: # sometimes readings of 1 come in error # 
                     self._pauseDistanceSensor = True
-                    self.interruptCallback("short-distance")
+                    self.interruptCallback("short-distance", dist)
+                #elif dist > self.longDistance:
+                #    self._pauseDistanceSensor = True
+                #    self.interruptCallback("long-distance", dist)                    
             sleep(0.1)    
 
 
@@ -142,7 +149,7 @@ class Head:
             if not self._pauseThermalSensor:
                 matrix = self.thermalSensor.readMatrix()
                 min,max,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
-                if max>self.heatDetect: #!!temp
+                if max>self.heatDetect:
                     self._pauseThermalSensor = True
-                    self.interruptCallback("heat-detect")
+                    self.interruptCallback("heat-detect", max)
             sleep(0.1)                
