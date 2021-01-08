@@ -159,41 +159,48 @@ class Leg():
         '''Put this knee fully down'''
         kneeOffset = 0
         if self.direction==-1:
-            self.knee.moveRelativeToHigh(deltaAngle=kneeOffset, secs=t)
+            t1 = Thread(target=self.knee.moveRelativeToHigh, kwargs={'deltaAngle':kneeOffset, 'secs':t})
         else:
-            self.knee.moveRelativeToLow(deltaAngle=kneeOffset, secs=t) 
+            t1 = Thread(target=self.knee.moveRelativeToLow, kwargs={'deltaAngle':kneeOffset, 'secs':t})
+        runThreadsTogether([t1])
 
     def kneeFullUp(self, t=1):
         '''Put the knee fully up'''
         kneeOffset = 0
         if self.direction==-1:
-            self.knee.moveRelativeToLow(deltaAngle=kneeOffset, secs=t)
+            t1 = Thread(target=self.knee.moveRelativeToLow, kwargs={'deltaAngle':kneeOffset, 'secs':t})
         else:
-            self.knee.moveRelativeToHigh(deltaAngle=kneeOffset, secs=t)
+            t1 = Thread(target=self.knee.moveRelativeToHigh, kwargs={'deltaAngle':kneeOffset, 'secs':t})
+        runThreadsTogether([t1])
 
     def hipFullForward(self, t=1):
         '''Put the hip fully forward'''
         hipOffset = 0
         if self.direction==-1:
-            self.hip.moveRelativeToHigh(deltaAngle=hipOffset, secs=t) 
+            t1 = Thread(target=self.hip.moveRelativeToHigh, kwargs={'deltaAngle':hipOffset, 'secs':t}) 
         else:
-            self.hip.moveRelativeToLow(deltaAngle=hipOffset, secs=t) 
+            t1 = Thread(target=self.hip.moveRelativeToLow, kwargs={'deltaAngle':hipOffset, 'secs':t}) 
+        runThreadsTogether([t1])
 
     def hipFullBackward(self, t=1):
         '''Put the hip fully backward'''
         hipOffset = 0
         if self.direction==-1:
-            self.hip.moveRelativeToLow(deltaAngle=hipOffset, secs=t) 
+            t1 = Thread(target=self.hip.moveRelativeToLow, kwargs={'deltaAngle':hipOffset, 'secs':t}) 
         else:
-            self.hip.moveRelativeToHigh(deltaAngle=hipOffset, secs=t) 
+            t1 = Thread(target=self.hip.moveRelativeToHigh, kwargs={'deltaAngle':hipOffset, 'secs':t}) 
+        runThreadsTogether([t1])
 
     def hipMid(self, t=1):
         '''Put the hip into mid position'''
-        self.hip.moveRelativeToMid(0, secs=t)
+        t1 = Thread(target=self.hip.moveRelativeToMid, kwargs={'deltaAngle':0, 'secs':t}) 
+        runThreadsTogether([t1])
 
     def kneeMid(self, t=1):
         '''Put the knee into mid position'''
-        self.knee.moveRelativeToMid(0, secs=t)
+        t1 = Thread(target=self.knee.moveRelativeToMid, kwargs={'deltaAngle':0, 'secs':t}) 
+        runThreadsTogether([t1])
+
 
     def setHipPos(self, pos, t=0):
         if pos==LEG_FRONT:

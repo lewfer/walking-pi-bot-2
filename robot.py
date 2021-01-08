@@ -116,7 +116,7 @@ class Robot(Programmer):
             elif optionName=="save":
                 self.animal.settings["leg_ranges"][legPair]["left"]["hip"][pos] = int(left.hip._angle)
                 self.animal.settings["leg_ranges"][legPair]["right"]["hip"][pos] = int(right.hip._angle)
-                self.animal.storeSettings()     
+                self.animal.storeAndReapplySettings()     
                 self.showMessage("Saved",name)
                 sleep(2)                
                 break
@@ -177,7 +177,7 @@ class Robot(Programmer):
             elif optionName=="save":
                 self.animal.settings["leg_ranges"][legPair]["left"]["knee"][pos] = int(left.knee._angle)
                 self.animal.settings["leg_ranges"][legPair]["right"]["knee"][pos] = int(right.knee._angle)
-                self.animal.storeSettings()     
+                self.animal.storeAndReapplySettings()     
                 self.showMessage("Saved",name)
                 sleep(2)                
                 break
@@ -234,7 +234,7 @@ class Robot(Programmer):
                 joint.nudge(self.rotaryAction)
             elif optionName=="save":
                 setting[LEG_MID] = int(joint._angle)
-                self.animal.storeSettings()     
+                self.animal.storeAndReapplySettings()     
                 self.showMessage("Saved",name)
                 sleep(2)                
                 break
@@ -328,7 +328,7 @@ class Robot(Programmer):
             if optionName=="return":
                 break           
 
-    def testTrackMovements(self):
+    def tesTrackHotspot(self):
         """Follow heat with head"""
         options = ["return",".",".",".","."]
         self.showOptions(options)
@@ -336,7 +336,7 @@ class Robot(Programmer):
         position = -100
         while True:
             self.showMessage(None, str(position))
-            self.animal.head.trackMovement()
+            self.animal.head.trackHotspot()
 
             optionName = self.getSelectedOption(options)
             if optionName=="return":
@@ -418,7 +418,7 @@ menu = {
             "main/menu/test/sensors/antennae": "testAntennae()",
 
             "main/menu/test/head/move": "testHeadMovements()",
-            "main/menu/test/head/heat": "testTrackMovements()",
+            "main/menu/test/head/heat": "testHotspot()",
 
 
             "main/menu/freset" : "factoryReset()"

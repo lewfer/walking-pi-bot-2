@@ -3,7 +3,15 @@ animal.py
 
 Implementation of Animal class.
 An Animal is a robot with a number of pairs of legs.
-Each leg will have one and only one thread running movements at a time.  This prevents multiple threads trying to move a single servo at the same time, which causes erratic movements. 
+
+Each leg will have one and only one thread running movements at a time.  
+This prevents multiple threads trying to move a single servo at the same time, which causes erratic movements. 
+
+Animal settings are stored in a json file.
+
+You can run specific behaviours, e.g. animal.forward().
+
+You can also start its random movement mode by calling animal.start()
 """
 
 # Imports
@@ -22,7 +30,7 @@ from gpiozero import Button
 
 # Constants
 # -------------------------------------------------------------------------------------------------
-SETTINGSFILENAME = 'creature_settings.json'
+SETTINGSFILENAME = 'animal_settings.json'
 
     
 
@@ -91,14 +99,128 @@ class Animal():
             'P':'do_point()',
             'E':'do_eat()',
             'S':'do_sit()',
-            '^':'do_high()',
-            'v':'do_low()',
+            '^':'do_kneesup()',
+            'v':'do_kneesdown()',
+            '<':'do_hipsbackward()',
+            '>':'do_hipsforward()',
             'A':'do_alert()',
             'I':'endInterrupt()',
             'M':'do_detectMovement()',
-            'T':'do_trackMovement()'
+            'T':'do_trackHotspot()'
             }
 
+
+    # Handlers for actions 
+    # ---------------------------------------------------------------------------------------------
+
+    def setDefaultSettings(self):
+        self.settings = {"leg_ranges": []}
+        # knee order: down, mid, up
+        # hip order: back, mid, forward
+        for i in range(len(self.legPairs)):
+            self.settings["leg_ranges"].append({"left": {"hip": [130,90,70],"knee": [50,90,130]},"right": {"hip": [50,90,110],"knee": [130,90,50]}})
+
+        self.settings['REACHTIME'] = 1
+        self.settings['PUSHTIME'] = 1
+        self.settings['PUSHDELAY'] = 0
+
+        # Random wait time between certain movements, in tenths of a second
+        self.settings['RANDOMWAIT'] = 2    
+
+        self.settings['STEPSPERDEGREE'] = 1
+
+        # Weights for random movement action choices
+        #                                 ['F','S','B','L','R','U','P','E','A']
+        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  2,  1,  1]
+
+        # Min/max time for action to run
+        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,15],'R':[2,15],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[5,10]}
+
+        # Number of seconds to wait before generating another random action
+        self.settings['TICKPERIOD'] = 1
+
+        # Number of alertness points to add for each tick when the animal is unwinding
+        self.settings['UNWINDALERTNESSINCREASE'] = 5
+
+        # Head movement range in degrees
+        self.settings['HEADHIGHANGLE'] = 135
+        self.settings['HEADLOWANGLE'] = 45
+        self.settings['HEADMIDANGLE'] = 90
+
+        # Change in head angle when tracking
+        self.settings['HEADTRACKDELTA'] = 10
+
+        # Sensor thresholds
+        self.settings['SHORTDISTANCE'] = 10     # triggers short-distance interrupt when distance less than this
+        self.settings['HEATDETECT'] = 26        # triggers heat-detect interrupt when head more than this
+
+
+    def loadSettings(self):
+        '''Load the settings file, which contains the calibrated settings for each joint'''
+        self.setDefaultSettings()
+        try:
+            # Try to load the settings file
+            with open(SETTINGSFILENAME) as f:
+                self.log.info("Settings {} found".format(SETTINGSFILENAME))
+                self.settings.update(json.load(f))
+                self.storeSettings() # in case we added new defaults
+        except FileNotFoundError:
+            # If no settings file use defaults 
+            self.log.info("Settings file {} not found.  Using defaults".format(SETTINGSFILENAME))
+            self.storeSettings()
+            #self.factoryReset()
+        self.log.info(self.settings)
+
+        self.applySettings()
+
+    def applySettings(self):
+        # Now set the default angles for each joint.  We need to mirror the angles left and right legs 
+        for pair in range(len(self.legPairs)):
+
+            self.legPairs[pair].left.hip.lowAngle = self.settings["leg_ranges"][pair]["left"]["hip"][LEG_FRONT]
+            self.legPairs[pair].left.knee.lowAngle = self.settings["leg_ranges"][pair]["left"]["knee"][LEG_DOWN]
+            self.legPairs[pair].right.hip.lowAngle = self.settings["leg_ranges"][pair]["right"]["hip"][LEG_BACK]
+            self.legPairs[pair].right.knee.lowAngle = self.settings["leg_ranges"][pair]["right"]["knee"][LEG_UP]
+
+            self.legPairs[pair].left.hip.midAngle = self.settings["leg_ranges"][pair]["left"]["hip"][LEG_MID]
+            self.legPairs[pair].left.knee.midAngle = self.settings["leg_ranges"][pair]["left"]["knee"][LEG_MID]
+            self.legPairs[pair].right.hip.midAngle = self.settings["leg_ranges"][pair]["right"]["hip"][LEG_MID]
+            self.legPairs[pair].right.knee.midAngle = self.settings["leg_ranges"][pair]["right"]["knee"][LEG_MID]
+
+            self.legPairs[pair].left.hip.highAngle = self.settings["leg_ranges"][pair]["left"]["hip"][LEG_BACK]
+            self.legPairs[pair].left.knee.highAngle = self.settings["leg_ranges"][pair]["left"]["knee"][LEG_UP]
+            self.legPairs[pair].right.hip.highAngle = self.settings["leg_ranges"][pair]["right"]["hip"][LEG_FRONT]
+            self.legPairs[pair].right.knee.highAngle = self.settings["leg_ranges"][pair]["right"]["knee"][LEG_DOWN]
+
+            self.head.joint.midAngle = self.settings['HEADMIDANGLE'] 
+            self.head.joint.highAngle = self.settings['HEADHIGHANGLE']
+            self.head.joint.lowAngle = self.settings['HEADLOWANGLE']
+
+            self.head.trackDelta = self.settings['HEADTRACKDELTA'] 
+            self.head.shortDistance = self.settings['SHORTDISTANCE'] 
+            self.head.heatDetect = self.settings['HEATDETECT'] 
+
+            #print(self.legPairs[pair].left.hip)
+            #print(self.legPairs[pair].left.knee)
+            #print(self.legPairs[pair].right.hip)
+            #print(self.legPairs[pair].right.knee)
+
+    def storeSettings(self):
+        '''Store the default settings to the settings file'''
+        # Save the settings dictionary to file
+        with open(SETTINGSFILENAME, 'w') as f:
+            json.dump(self.settings, f)
+
+    def storeAndReapplySettings(self):
+        '''Store the default settings to the settings file'''
+        self.storeSettings()
+
+        # Reload so settings are applied
+        self.loadSettings()
+
+    def factoryReset(self):
+        self.setDefaultSettings()
+        self.storeAndReapplySettings()
 
 
 
@@ -139,11 +261,17 @@ class Animal():
     def do_sit(self):
         self.handleAction(self.sit, "S")
 
-    def do_high(self):
-        self.handleAction(self.high, "^")
+    def do_kneesup(self):
+        self.handleAction(self.kneesup, "^")
 
-    def do_low(self):
-        self.handleAction(self.low, "v")
+    def do_kneesdown(self):
+        self.handleAction(self.kneesdown, "v")
+
+    def do_hipsbackward(self):
+        self.handleAction(self.hipsbackward, "<")
+
+    def do_hipsforward(self):
+        self.handleAction(self.hipsforward, ">")
 
     def do_alert(self):
         self.handleAction(self.alert, "A")
@@ -151,8 +279,8 @@ class Animal():
     def do_detectMovement(self):
         self.handleAction(self.detectMovement, "M")
 
-    def do_trackMovement(self):
-        self.handleAction(self.trackMovement, "T")
+    def do_trackHotspot(self):
+        self.handleAction(self.trackHotspot, "T")
     
 
     # Action management
@@ -219,34 +347,22 @@ class Animal():
             elif self.age % 5 == 0: #!!every 5 seconds
                 # No timer, so allow another random, weighted choice
                 actions = ['F','S','B','L','R','U','P','E','A']
-                weights = [ 40, 10, 1,  3,  3,  2,  2,  1,  1] # !! weights parameters
-                #weights = [20,0,0,0,0] # !! weights
+                weights = self.settings['RANDOMWEIGHTS']
                 choice = random.choices(actions, weights)[0]
                 self.log.info("random {}".format(choice))
 
                 # Start the choice, and set a timer to start moving forward again after a random period
-                #self.handleInterrupt("random", 0)
-                if choice in ['L','R']:
-                    # These actions can run for a short period
+                if choice != 'F':
                     self.log.info("Initiating action {}".format(choice))
                     exec("self."+self.actionFunction[choice])
-                    self.setTimer(random.randint(2, 15), 'F') #!! rest min/max parameters
-                elif choice in ['S','P','E','A']:
-                    # These actions can run for a medium period
-                    self.log.info("Initiating action {}".format(choice))
-                    exec("self."+self.actionFunction[choice])
-                    self.setTimer(random.randint(2, 30), 'F') #!! rest min/max parameters
-                elif choice=='U' and self.alertness < 100:
-                    # These actions can run for a long period
-                    self.log.info("Initiating action {}".format(choice))
-                    self.do_unwind()
-                    self.setTimer(random.randint(3, 50), 'F') #!! rest min/max parameters
+                    minmax = self.settings['RANDOMTIME'][choice]    # min/max time for action to run (from settings)
+                    self.setTimer(random.randint(minmax[0],minmax[1]), 'F')                   
 
-            sleep(1)
+            sleep(self.settings['TICKPERIOD'])
 
             # Adjust alertness
             if self.currentAction=='U':
-                self.alertness += 5
+                self.alertness += self.settings['UNWINDALERTNESSINCREASE']
             else:
                 self.alertness -= 1
 
@@ -271,30 +387,6 @@ class Animal():
 
 
 
-    def detectMovement(self):
-        # Put in alert state
-        self.alert()
-
-        tracking = False
-
-        while True:
-            if tracking:
-                self.head.trackMovement()
-            else:
-                # Detect movement
-                movement = self.head.detectMovement()
-                if movement>80: #!!param
-                    self.log.info("Movement {} so start tracking".format(movement))
-                    self.setTimer(10, self.timerAction) # delay the next action
-                    tracking = True
-
-            # If request was made to end , break out of loop
-            if self.stopped:
-                #self.log.info("Stopped detect movement")
-                break         
-
-            sleep(0.2)           
-         
 
 
     # Interrupt handling
@@ -316,19 +408,23 @@ class Animal():
             self.interruptBeingHandled = True
             if self.interruptId=="short-distance":
                 self.do_backward()
-                self.setTimer(10, 'I') # !!turn time
+                minmax = self.settings['RANDOMTIME']['B']   
+                self.setTimer(random.randint(minmax[0],minmax[1]), 'I')       
 
             elif self.interruptId=="left-antenna":
                 self.do_right()
-                self.setTimer(10, 'I') # !!turn time
+                minmax = self.settings['RANDOMTIME']['R']   
+                self.setTimer(random.randint(minmax[0],minmax[1]), 'I')    
 
             elif self.interruptId=="right-antenna":
                 self.do_left()
-                self.setTimer(10, 'I') # !!turn time
+                minmax = self.settings['RANDOMTIME']['L']   
+                self.setTimer(random.randint(minmax[0],minmax[1]), 'I')    
 
-            elif self.interruptId=="heat":
+            elif self.interruptId=="heat-detect":
                 self.do_detectMovement()
-                self.setTimer(10, 'I') # !!turn time 
+                minmax = self.settings['RANDOMTIME']['M']   
+                self.setTimer(random.randint(minmax[0],minmax[1]), 'I')    
 
 
     # Sensors
@@ -353,70 +449,6 @@ class Animal():
             self.legPairs[pair].right.hip.stepsPerDegree = spd
             self.legPairs[pair].right.knee.stepsPerDegree = spd
 
-    def factoryReset(self):
-        self.settings = {"leg_ranges": []}
-        # knee order: down, mid, up
-        # hip order: back, mid, forward
-        for i in range(len(self.legPairs)):
-            self.settings["leg_ranges"].append({"left": {"hip": [130,90,50],"knee": [50,90,130]},"right": {"hip": [50,90,130],"knee": [130,90,50]}})
-        self.storeSettings()
-            
-    def loadSettings(self):
-        '''Load the settings file, which contains the calibrated settings for each joint'''
-
-        try:
-            # Try to load the settings file
-            with open(SETTINGSFILENAME) as f:
-                self.log.info("Settings {} found".format(SETTINGSFILENAME))
-                self.settings = json.load(f)
-        except FileNotFoundError:
-            # If no settings file use defaults 
-            self.log.info("Settings file {} not found.  Using defaults".format(SETTINGSFILENAME))
-            self.factoryReset()
-        self.log.info(self.settings)
-
-        # Now set the default angles for each joint.  We need to mirror the angles left and right legs 
-        for pair in range(len(self.legPairs)):
-
-            self.legPairs[pair].left.hip.lowAngle = self.settings["leg_ranges"][pair]["left"]["hip"][LEG_FRONT]
-            self.legPairs[pair].left.knee.lowAngle = self.settings["leg_ranges"][pair]["left"]["knee"][LEG_DOWN]
-            self.legPairs[pair].right.hip.lowAngle = self.settings["leg_ranges"][pair]["right"]["hip"][LEG_BACK]
-            self.legPairs[pair].right.knee.lowAngle = self.settings["leg_ranges"][pair]["right"]["knee"][LEG_UP]
-
-            self.legPairs[pair].left.hip.midAngle = self.settings["leg_ranges"][pair]["left"]["hip"][LEG_MID]
-            self.legPairs[pair].left.knee.midAngle = self.settings["leg_ranges"][pair]["left"]["knee"][LEG_MID]
-            self.legPairs[pair].right.hip.midAngle = self.settings["leg_ranges"][pair]["right"]["hip"][LEG_MID]
-            self.legPairs[pair].right.knee.midAngle = self.settings["leg_ranges"][pair]["right"]["knee"][LEG_MID]
-
-            self.legPairs[pair].left.hip.highAngle = self.settings["leg_ranges"][pair]["left"]["hip"][LEG_BACK]
-            self.legPairs[pair].left.knee.highAngle = self.settings["leg_ranges"][pair]["left"]["knee"][LEG_UP]
-            self.legPairs[pair].right.hip.highAngle = self.settings["leg_ranges"][pair]["right"]["hip"][LEG_FRONT]
-            self.legPairs[pair].right.knee.highAngle = self.settings["leg_ranges"][pair]["right"]["knee"][LEG_DOWN]
-
-            #print(self.legPairs[pair].left.hip)
-            #print(self.legPairs[pair].left.knee)
-            #print(self.legPairs[pair].right.hip)
-            #print(self.legPairs[pair].right.knee)
-
-
-    """
-    def setSettings(self):
-        '''Set the current setting of each joint as the default'''
-
-        for pair in range(len(self.legPairs)):
-            self.legPairs[pair].left.hip.updateDefault()
-            self.legPairs[pair].left.knee.updateDefault()
-            self.legPairs[pair].right.hip.updateDefault()
-            self.legPairs[pair].right.knee.updateDefault()"""
-
-    def storeSettings(self):
-        '''Store the default settings to the settings file'''
-        # Save the settings dictionary to file
-        with open(SETTINGSFILENAME, 'w') as f:
-            json.dump(self.settings, f)
-
-        # Reload so settings are applied
-        self.loadSettings()
 
 
     def runOnThread(self, legId, func, params):
@@ -465,6 +497,10 @@ class Animal():
         #self.log.debug("Stopped threads: {}".format(activeCount()))
 
 
+
+    # Construction
+    # ---------------------------------------------------------------------------------------------
+
     def addPairOfLegs(self, left, right):
         '''Add legs from front to back'''
         index = len(self.legPairs)
@@ -484,6 +520,12 @@ class Animal():
 
     # Actions
     # ---------------------------------------------------------------------------------------------
+
+    def waitRandom(self):
+        '''Wait for a random time (in tenths of a second)'''
+        sleep(random.randint(0,self.settings['RANDOMWAIT'])/10.0) 
+
+
     def forward(self):
         '''Move forward'''
                 
@@ -493,7 +535,7 @@ class Animal():
             # Move limbs forwards, one at a time
             # ----------------------------------
             
-            t = self.settings['TURTLEREACHSPEED']
+            t = self.settings['REACHTIME']
 
             # Move front limbs 
             self.runOnThread('L0', 'reachForward', {'t':t})
@@ -523,7 +565,7 @@ class Animal():
             # Move limbs backwards together
             # -----------------------------
 
-            t = self.settings['TURTLEPUSHSPEED']
+            t = self.settings['PUSHTIME']
 
             # Move front limbs 
             self.runOnThread('L0', 'pushBackward', {'t':t})
@@ -532,14 +574,14 @@ class Animal():
 
             if self.numLegs > 2:
                 # Move middle limbs 
-                sleep(self.settings['TURTLEPUSHDELAY'])
+                sleep(self.settings['PUSHDELAY'])
                 self.runOnThread('L1', 'pushBackward', {'t':t})
                 self.runOnThread('R1', 'pushBackward', {'t':t})
                 legs += ['L1','R1']
 
             if self.numLegs > 4:
                 # Move rear limbs
-                sleep(self.settings['TURTLEPUSHDELAY'])
+                sleep(self.settings['PUSHDELAY'])
                 self.runOnThread('L2', 'pushBackward', {'t':t})
                 self.runOnThread('R2', 'pushBackward', {'t':t})
                 legs += ['L2','R2']
@@ -561,7 +603,7 @@ class Animal():
             # Move limbs backwards, one at a time
             # ----------------------------------
                         
-            t = self.settings['TURTLEREACHSPEED']
+            t = self.settings['REACHTIME']
 
             # Move front limbs
             self.runOnThread('L0', 'reachBackward', {'t':t})
@@ -588,7 +630,7 @@ class Animal():
                 self.joinThreads(['R2'])
                 self.waitRandom() 
 
-            t = self.settings['TURTLEPUSHSPEED']
+            t = self.settings['PUSHTIME']
 
             # Move limbs forwards together
             # -----------------------------
@@ -600,14 +642,14 @@ class Animal():
 
             if self.numLegs > 2:
                 # Move middle limbs
-                sleep(self.settings['TURTLEPUSHDELAY'])
+                sleep(self.settings['PUSHDELAY'])
                 self.runOnThread('L1', 'pushForward', {'t':t})
                 self.runOnThread('R1', 'pushForward', {'t':t})
                 legs += ['L1','R1']
 
             if self.numLegs > 4:
                 # Move rear limbs
-                sleep(self.settings['TURTLEPUSHDELAY'])
+                sleep(self.settings['PUSHDELAY'])
                 self.runOnThread('L2', 'pushForward', {'t':t})
                 self.runOnThread('R2', 'pushForward', {'t':t})
                 legs += ['L2','R2']
@@ -628,7 +670,7 @@ class Animal():
             # Move limbs into position, one at a time
             # ---------------------------------------
                 
-            t = self.settings['TURTLEREACHSPEED']
+            t = self.settings['REACHTIME']
 
             # Move front limbs
             self.runOnThread('L0', 'reachForward', {'t':t})
@@ -659,7 +701,7 @@ class Animal():
             # Move limbs forwards together
             # -----------------------------
 
-            t = self.settings['TURTLEPUSHSPEED']
+            t = self.settings['PUSHTIME']
 
             # Move front limbs
             self.runOnThread('L0', 'pushBackward', {'t':t})
@@ -668,14 +710,14 @@ class Animal():
 
             if self.numLegs > 2:
                 # Move middle limbs
-                sleep(self.settings['TURTLEPUSHDELAY'])
+                sleep(self.settings['PUSHDELAY'])
                 self.runOnThread('L1', 'pushForward', {'t':t})
                 self.runOnThread('R1', 'pushBackward', {'t':t})
                 legs = ['L1','R1']
 
             if self.numLegs > 4:
                 # Move rear limbs
-                sleep(self.settings['TURTLEPUSHDELAY'])
+                sleep(self.settings['PUSHDELAY'])
                 self.runOnThread('L2', 'pushForward', {'t':t})
                 self.runOnThread('R2', 'pushBackward', {'t':t})
                 legs = ['L2','R2']
@@ -696,7 +738,7 @@ class Animal():
             # Move limbs into position, one at a time
             # ---------------------------------------
                                
-            t = self.settings['TURTLEREACHSPEED']
+            t = self.settings['REACHTIME']
 
             # Move front limbs
             self.runOnThread('L0', 'reachBackward', {'t':t})
@@ -723,7 +765,7 @@ class Animal():
                 self.joinThreads(['R2'])
                 self.waitRandom() 
 
-            t = self.settings['TURTLEPUSHSPEED']
+            t = self.settings['PUSHTIME']
 
             # Move limbs together
             # -------------------
@@ -734,13 +776,13 @@ class Animal():
             legs = ['L0','R0']
 
             if self.numLegs > 2:
-                sleep(self.settings['TURTLEPUSHDELAY'])
+                sleep(self.settings['PUSHDELAY'])
                 self.runOnThread('L1', 'pushBackward', {'t':t})
                 self.runOnThread('R1', 'pushForward', {'t':t})
                 legs = ['L1','R1']
 
             if self.numLegs > 4:
-                sleep(self.settings['TURTLEPUSHDELAY'])
+                sleep(self.settings['PUSHDELAY'])
                 self.runOnThread('L2', 'pushBackward', {'t':t})
                 self.runOnThread('R2', 'pushForward', {'t':t})
                 legs = ['L2','R2']
@@ -798,7 +840,7 @@ class Animal():
         self.log.info("eat")
 
         self.stopped = False
-        t = 2
+        t = 1
 
         while True:
 
@@ -897,8 +939,8 @@ class Animal():
         self.joinThreads(threads)         
    
 
-    def high(self, t=1):
-        '''Put the animal into an high state (all servos at highest setting)'''
+    def kneesup(self, t=1):
+        '''Lift knees all the way up'''
         
         self.stopped = False
 
@@ -908,13 +950,13 @@ class Animal():
             left = 'L'+str(pair)
             right = 'R'+str(pair)
             threads += [left,right]
-            self.runOnThread(left, 'high', {'t':t})
-            self.runOnThread(right, 'high', {'t':t})              
+            self.runOnThread(left, 'kneeFullUp', {'t':t})
+            self.runOnThread(right, 'kneeFullUp', {'t':t})            
         self.joinThreads(threads)                     
        
 
-    def low(self, t=1):
-        '''Put the animal into an low state (all servos at lowest setting)'''
+    def kneesdown(self, t=1):
+        '''Put knees all the way down'''
         
         self.stopped = False
 
@@ -924,10 +966,81 @@ class Animal():
             left = 'L'+str(pair)
             right = 'R'+str(pair)
             threads += [left,right]
-            self.runOnThread(left, 'low', {'t':t})
-            self.runOnThread(right, 'low', {'t':t})            
+            self.runOnThread(left, 'kneeFullDown', {'t':t})
+            self.runOnThread(right, 'kneeFullDown', {'t':t})            
         self.joinThreads(threads)    
           
+    def hipsbackward(self, t=1):
+        '''Push hips all the way backwards'''
+        
+        self.stopped = False
+
+        # Set up a thread for each leg movement and move all legs simultaneously
+        threads = []
+        for pair in range(len(self.legPairs)):
+            left = 'L'+str(pair)
+            right = 'R'+str(pair)
+            threads += [left,right]
+            self.runOnThread(left, 'hipFullBackward', {'t':t})
+            self.runOnThread(right, 'hipFullBackward', {'t':t})            
+        self.joinThreads(threads)                     
+       
+
+    def hipsforward(self, t=1):
+        '''Push hips all the way forwards'''
+        
+        self.stopped = False
+
+        # Set up a thread for each leg movement and move all legs simultaneously
+        threads = []
+        for pair in range(len(self.legPairs)):
+            left = 'L'+str(pair)
+            right = 'R'+str(pair)
+            threads += [left,right]
+            self.runOnThread(left, 'hipFullForward', {'t':t})
+            self.runOnThread(right, 'hipFullForward', {'t':t})            
+        self.joinThreads(threads)    
+          
+
+    def detectMovement(self):
+        # Put in alert state
+        self.alert()
+
+        tracking = False
+
+        while True:
+            if tracking:
+                self.head.trackHotspot()
+            else:
+                # Detect movement
+                movement = self.head.detectMovement()
+                if movement is not None:
+                    if movement>80: #!!param
+                        self.log.info("Movement {} so start tracking".format(movement))
+                        self.setTimer(10, self.timerAction) # delay the next action !!
+                        tracking = True
+
+            # If request was made to end , break out of loop
+            if self.stopped:
+                #self.log.info("Stopped detect movement")
+                break         
+
+            sleep(0.2)           
+
+    def trackHotspot(self):
+        # Put in alert state
+        self.alert()
+
+        while True:
+            self.head.trackHotspot()
+            
+            # If request was made to end , break out of loop
+            if self.stopped:
+                #self.log.info("Stopped detect movement")
+                break         
+
+            sleep(0.2)            
+         
 
     """
     def setAngles(self):
@@ -962,6 +1075,8 @@ class Animal():
         # Stop all threads
         self.stopThreads()
 
+
+
 if __name__ == "__main__":
     print("Testing Animal")    
 
@@ -969,7 +1084,7 @@ if __name__ == "__main__":
     # Create animal
     animal = Animal()
 
-    animal.log.setLevel(logging.DEBUG)
+    #animal.log.setLevel(logging.DEBUG)
 
     # With 2 legs           
     animal.addPairOfLegs(Leg(Joint(0), Joint(1), 1), Leg(Joint(2), Joint(3), -1))
@@ -981,22 +1096,17 @@ if __name__ == "__main__":
     animal.wakeSlowly(5) 
     sleep(2)
 
-    """
-    
-    print("animal.unwind()")
-    animal.unwind()
-    sleep(2)
+    # Run through all possible actions
+    for func in animal.actionFunction.values():
+        print(func)
+        eval("animal."+func)
+        sleep(5)
 
-    print("alert()")
-    animal.alert()
-    sleep(2)
-
-    print("sit()")
-    animal.sit()
-    sleep(2)
-    """
     
+    # Run the animal in random mode
+    """
     print("Running animal")
     animal.start()
     while True:
         sleep(0.2)
+    """
