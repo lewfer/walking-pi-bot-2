@@ -1,3 +1,12 @@
+"""
+programmer.py
+
+Controls the plug-in programmer.
+The programmer is an LCD display with 5 buttons and a rotary encoder.
+The display shows a menu, which can be controlled by the buttons.
+The rotary encoder can be used to adjust settings up and down (e.g. moving a servo)
+"""
+
 import RPi_I2C_driver
 from time import sleep
 from gpiozero import Button
@@ -8,28 +17,36 @@ class Programmer():
 
     def __init__(self, menu):
         print("Init Programmer")
+
+        # The buttons
         self.b1 = Button(22) 
         self.b2 = Button(23) 
         self.b3 = Button(24) 
         self.b4 = Button(25) 
         self.breturn = Button(27)
 
+        # Callback handlers for buttons
         self.b1.when_pressed = self.callback
         self.b2.when_pressed = self.callback
         self.b3.when_pressed = self.callback
         self.b4.when_pressed = self.callback
         self.breturn.when_pressed = self.callback
 
+        # The LCD display
         self.lcd = None
 
+        # The rotary encoder
+        self.knob = RotaryEncoder(17,18,4)
+
+        # Which button was selected
         self.selected = None
 
         self.menu = menu
 
-        self.knob = RotaryEncoder(17,18, 4)
 
 
     def setLcd(self, line1, line2):
+        """Show the lines on the LCD, if present"""
         try:
             if self.lcd is None:
                 print("Creating LCD", self.lcd)
@@ -44,6 +61,7 @@ class Programmer():
 
 
     def callback(self, button):
+        """Called when a button is pressed"""
 
         #print("Pressed button on", button.pin)
         but = str(button.pin)
@@ -59,6 +77,8 @@ class Programmer():
             self.selected = 0 # return
 
     def showOptions(self, options, msg1=None, msg2=None):
+        """Show the menu options, plus some optional messages on line 1 and 2"""
+
         # Add arrow for menu options only
         opt1 = options[1]
         if not opt1.endswith('.'): 
@@ -109,11 +129,14 @@ class Programmer():
         self.setLcd(line1, line2)
 
     def showMessage(self, line1, line2):
+        """Show a message on lines 1 and 2"""
         line1 = "{: <16}".format(line1) if line1 is not None else None
         line2 = "{: <16}".format(line2) if line2 is not None else None
         self.setLcd(line1, line2)
 
     def runMenu(self, menuName):
+        """Recursively show and act on the menu"""
+
         print("runMenu", menuName)
 
         # If we have a list, get and show list of options
@@ -154,7 +177,8 @@ class Programmer():
             self.showOptions(options)
 
     def getSelectedOption(self, options):      
-        # Get option selected
+        """Get option selected in the menu"""
+
         if self.selected == None:
             sleep(0.1)
             return None
@@ -163,6 +187,8 @@ class Programmer():
         return optionName
 
     def yesNo(self, msg):
+        """Show a Yes/No option and return the selected option"""
+        
         options = [".",".",".","Yes","No"]
         self.showOptions(options, msg)
         while True: 

@@ -17,33 +17,13 @@ Joints also have a high and low angle, which are the limits that the joint servo
 #from servo_pigpio import Servo
 from servo_bonnet import Servo
 
+from easing import *
+
 from time import sleep
 
-# Functions for easing
-# -------------------------------------------------------------------------------------------------
+# Select the easing function
 def ease(t):
     return easeInOutQuad(t)
-
-def easeLinear(t):
-    return t
-
-def easeAccelerating(t):
-    return t*t*t*t
-
-def easeInOutQuad(t):
-    if t<.5:
-        e = 2*t*t
-    else: 
-        e = -1+(4-2*t)*t
-    return e
-
-def easeInOutQuart(t):
-    if t<.5:
-        e = 8*t*t*t*t
-    else: 
-        t = t -1
-        e = 1-8*(t)*t*t*t
-    return e
 
 
 # Class
@@ -54,15 +34,16 @@ class Joint():
     pi = None
 
     def __init__(self, pin):
+        # Public attributes
+        self.midAngle = 90                          # mid angle of servo
+        self.highAngle = 180                        # highest allowable angle
+        self.lowAngle = 0                           # lowest allowable angle
+        self.stepsPerDegree = 1                     # number of steps to take per angular degree, bigger means smoother
+        
+        # Private attributes
         self._pin = pin
         self._servo = Servo(pin)
-        self._angle = 90                                                                 # current angle of servo
-
-        # Public attributes
-        self.midAngle = 90                                                          # mid angle of servo
-        self.highAngle = 180                                                            # highest allowable angle
-        self.lowAngle = 0                                                               # lowest allowable angle
-        self.stepsPerDegree = 1                                                         # number of steps to take per angular degree, bigger means smoother
+        self._angle = 90                            # current angle of servo
 
     def __str__(self):
         return "_pin: {} _angle: {}  lowAngle: {} midAngle: {} highAngle {} stepsPerDegree {}".format(self._pin,self._angle,self.lowAngle,self.midAngle,self.highAngle,self.stepsPerDegree)
@@ -168,26 +149,6 @@ class Joint():
         #print("moveDirectToMid", self.midAngle)
         self.moveDirectTo(self.midAngle)
 
-    def updateMid(self):
-        '''Set a new mid position to the current position'''
-        self.midAngle = self._angle
-
-    """
-    def nudgeUp(self, amount=1):
-        '''Used for calibration.  Angle limited to 0-180'''
-        newAngle = min(180,self._angle + amount)
-        self._angle = newAngle
-        #print(self._angle)
-        self._servo.angle(self._angle)                                                      # move to final angle
-
-    def nudgeDown(self, amount=1):
-        '''Used for calibration.  Angle limited to 0-180'''
-        newAngle = max(0,self._angle - amount)
-        self._angle = newAngle
-        #print(self._angle)
-        self._servo.angle(self._angle)                                                      # move to final angle
-    """
-
     def nudge(self, amount=0):
         '''Used for calibration.  Angle limited to 0-180'''
         newAngle = min(180,max(0,self._angle + amount))
@@ -196,8 +157,8 @@ class Joint():
         self._servo.angle(self._angle)                                                      # move to final angle
 
     def stop(self):
+        '''Stop the servo'''
         self._servo.stop()
-        pass
 
 # Tests
 if __name__ == "__main__":

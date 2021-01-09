@@ -14,14 +14,14 @@ from programmer import *
 
 class Robot(Programmer):
 
-    def __init__(self, menu):
+    def __init__(self, animal, menu):
         Programmer.__init__(self, menu)   
 
-        # Create an animal with 2 legs
-        self.animal = Turtle()
+        # The animal (Turtle, Lizard or Insect)
+        self.animal = animal
 
         # Adjust parameter between 0.5 (fast) and 6 (slow) to change speed of movement
-        self.animal.setStepsPerDegree(self.animal.settings['STEPSPERDEGREE'])
+        #self.animal.setStepsPerDegree(self.animal.settings['STEPSPERDEGREE'])
 
         self.animal.messageCallback = self.messageCallback
 
@@ -424,7 +424,7 @@ menu = {
             "main/menu/freset" : "factoryReset()"
         }
 
-robot = Robot(menu)
+robot = Robot(Turtle(), menu)
 #robot.start()
 robot.runMenu("main")
 

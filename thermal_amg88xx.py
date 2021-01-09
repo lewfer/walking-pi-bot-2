@@ -1,9 +1,7 @@
-import time
 import busio
 import board
 import adafruit_amg88xx
-i2c = busio.I2C(board.SCL, board.SDA)
-amg = adafruit_amg88xx.AMG88XX(i2c)
+import time
 
 
 
@@ -16,10 +14,14 @@ class ThermalSensor:
         self.flipHorizontal = False
         self.flipVertical = False
 
+        i2c = busio.I2C(board.SCL, board.SDA)
+        self.amg = adafruit_amg88xx.AMG88XX(i2c)
+
+
     def readMatrix(self):
         if self.lastReading is not None:
             self.previousReading = self.lastReading.copy()
-        self.lastReading = amg.pixels
+        self.lastReading = self.amg.pixels
         if self.rotate:
             self. _rotate90()
         if self.flipHorizontal:
@@ -81,11 +83,22 @@ class ThermalSensor:
         return diffs
 
     def movement(self):        
-        """Detect movement.  Returns the sum of """
+        """Detect movement.  Returns the sum of abs changes in temperature across the matrix"""
         if self.lastReading is None or self.previousReading is None:
             return None
-        sumAbs = self._movement(self.lastReading, self.previousReading)
-        return sumAbs        
+
+        sumAbs, rowSumAbs, colSumAbs = self._movement(self.lastReading, self.previousReading)
+
+        hotrow = 0
+        for r,delta in enumerate(rowSumAbs):
+            if delta>rowSumAbs[hotrow]:
+                hotrow = r
+        hotcol = 0
+        for c,delta in enumerate(colSumAbs):
+            if delta>colSumAbs[hotcol]:
+                hotcol = c
+
+        return sumAbs, rowSumAbs, colSumAbs, (hotrow,hotcol)
 
 
     def minMaxMeanTemperature(self, matrix):
@@ -123,10 +136,14 @@ class ThermalSensor:
     def _movement(self, matrix1, matrix2):
         diff = self._delta(matrix1, matrix2)
         sumAbs = 0
-        for row in diff:
-            for temp in row:
+        rowSumAbs = [0]*8
+        colSumAbs = [0]*8        
+        for r,row in enumerate(diff):
+            for c,temp in enumerate(row):
                 sumAbs += abs(temp)
-        return sumAbs
+                rowSumAbs[r] += abs(temp)
+                colSumAbs[c] += abs(temp)           
+        return sumAbs, rowSumAbs, colSumAbs
 
 if __name__ == "__main__":
     print("Testing Thermal Sensor")       
