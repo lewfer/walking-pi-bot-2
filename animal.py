@@ -278,7 +278,7 @@ class Animal():
         # Do a scan (move head from side-to-side) looking for short distances
         self.head.pauseSensors()   # pause sensors while we scan
         distances, minpos, maxpos, movement = self.head.scan()
-        print(distances, minpos, maxpos)
+        print("Scan {} minpos={} maxpos={}".format(distances, minpos, maxpos))
 
         # Check what we saw
         if distances[minpos] < self.settings['SHORTDISTANCE'] : 
@@ -439,6 +439,7 @@ class Animal():
 
     def _setTimer(self, delay, action):
         """Cancel any existing timer and replace with this one.  Timers are used to """
+        print("timer", action, delay)
         #self.log.info("Set timer {} in {} secs".format(action, delay))
         #if self.timer is not None:
         #    self.timer.cancel()
@@ -450,10 +451,12 @@ class Animal():
 
     def _executeTimer(self):
         #!!surely need to stop previous action?
-        exec("self."+self.actionFunction[self._timerAction])
+        print("Execute", self._timerAction)
+        action = self._timerAction
         self._timerAction = None
         self._timerDelay = 0
         self._timerAgeStart = 0
+        exec("self."+self.actionFunction[action])
 
     def _startRandom(self):
         """Start a random behaviour generator"""
@@ -1160,6 +1163,8 @@ class Animal():
 
     def detectMovement(self):
         '''Stop and check for movement.  If movement detected, track it for a while'''
+
+        self._stopped = False
 
         # Put in alert state
         self.alert()

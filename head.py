@@ -165,7 +165,7 @@ class Head:
 
         # Check for thermal movement
         self.thermalSensor.readMatrix()
-        sleep(1)
+        sleep(1) #!! 
         movement = self.detectMovement()
 
         return distances, distances.index(min(distances)), distances.index(max(distances)), movement
