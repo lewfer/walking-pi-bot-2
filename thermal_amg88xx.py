@@ -145,26 +145,90 @@ class ThermalSensor:
                 colSumAbs[c] += abs(temp)           
         return sumAbs, rowSumAbs, colSumAbs
 
+    def printCols(self,cols):
+        for c in cols: print("{:>5.2f} ".format(c), end="")
+        print("")
+        print("      "*cols.index(max(cols)), " ^")
+
+    def printMatrix(self):
+        self.print(self.lastReading)
+
+
 if __name__ == "__main__":
     print("Testing Thermal Sensor")       
+
+    import os
+    from colorama import Fore, Back, Style
+    from collections import OrderedDict 
+
+    def printColour(matrix, ranges, dp=0):
+        fmt = '{0:.' + str(dp) + 'f}'
+        for row in matrix:
+            #print([fmt.format(temp) for temp in row])
+            for temp in row:
+                colour = ranges[list(ranges.keys())[-1]] # highest colour as default
+                for k in ranges.keys():
+                    if int(temp)<k:
+                        colour = ranges[k]
+                        break
+
+                #print(Fore.RED+str(round(temp,0))+" ", end="")
+                #print(ranges[int(temp)], end="")
+                """if temp>17:
+                    print(Fore.RED, end="")
+                else:
+                    print(Fore.GREEN, end="")"""
+                print(colour+str(fmt.format(temp))+" ", end="")
+                print(Style.RESET_ALL, end="")
+            print("")
+        print("")
 
     t = ThermalSensor()
     last = t.readMatrix()
     time.sleep(1)
 
+    print("Mode: 1) Summary, 2) Column Movements, 3) Matrix")
+    mode = input()[0]
+
     while True:
         matrix = t.readMatrix()
         #t.print(matrix,1)
+        os.system('clear')
 
-        min,max,mean,rowmeans,colmeans,hotspot = t.summarise()
-        #print(min,max,mean,rowmeans,colmeans,hotspot)
+        if mode=="1":
+            minval,maxval,meanval,rowmeans,colmeans,hotspot = t.summarise()
+            print(minval,maxval,meanval,rowmeans,colmeans,hotspot)
 
         #diff = t.delta()
         #print("diff")
         #t.print(diff)
 
-        movement = t.movement()
-        print(movement)
+        if mode=="2":
+            sumAbs, rowSumAbs, colSumAbs, hotspot = t.movement()
+            t.printCols(colSumAbs)
+            if (colSumAbs[hotspot[1]]>10):
+                print("Movement detected")
+
+        if mode=="3":
+            ranges = OrderedDict() 
+            ranges[16] = Style.DIM+Fore.BLACK+Back.BLACK
+            ranges[17] = Style.DIM+Fore.CYAN+Back.BLACK
+            ranges[18] = Style.DIM+Fore.BLUE+Back.BLACK
+            ranges[19] = Style.DIM+Fore.GREEN+Back.BLACK
+            ranges[20] = Style.DIM+Fore.YELLOW+Back.BLACK
+            ranges[21] = Style.DIM+Fore.MAGENTA+Back.BLACK
+            ranges[22] = Style.DIM+Fore.RED+Back.BLACK
+            ranges[23] = Style.NORMAL+Fore.BLACK+Back.CYAN
+            ranges[24] = Style.NORMAL+Fore.BLACK+Back.BLUE
+            ranges[25] = Style.NORMAL+Fore.BLACK+Back.GREEN
+            ranges[26] = Style.NORMAL+Fore.BLACK+Back.YELLOW
+            ranges[27] = Style.NORMAL+Fore.BLACK+Back.MAGENTA
+            ranges[28] = Style.NORMAL+Fore.BLACK+Back.RED
+            ranges[29] = Style.NORMAL+Fore.BLACK+Back.WHITE
+            ranges[30] = Style.BRIGHT+Fore.BLACK+Back.WHITE
+                    
+            printColour(matrix, ranges)
+
 
         last = matrix
 

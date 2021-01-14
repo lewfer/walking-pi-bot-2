@@ -35,6 +35,7 @@ class Head:
         self._pauseThermalSensor = False
         self._runningThermalSensor = False
         self.lastMaxTemperature = None
+        self.lastMinTemperature = None
 
         # Settings - can be overridden
         self.joint.midAngle = 90  
@@ -76,31 +77,42 @@ class Head:
 
         # Read the thermal sensor
         matrix = self.thermalSensor.readMatrix()
-        min,max,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
+        #_,_,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
         values = self.thermalSensor.movement()
 
-        # Sensor not ready
+        # If sensor not ready return
         if values is None:
-            return None
+            return False
 
-        # Unpack movement
-        movement,_,_,hotspot = values
+        # Unpack movement values
+        movement,_,colmovements,hotspot = values
+        #print("Movement {: 5.2f} Thermal columns ".format(movement), end="")
+        self.thermalSensor.printCols(colmovements)
+        #for c in colmovements: print("{: 5.2f} ".format(c), end="")
+        #print("")
+        #print("                               ", "      "*colmovements.index(max(colmovements)), "^")
 
         # Get the column which has most movement
-        col = hotspot[1]
+        hotcol = hotspot[1]
 
-        # React depending on if hot spot is to the left or right
-        if movement > 80/2: #!!
-            print("Insufficient movement")
+        # React depending on if hot spot (i.e. most movement) is to the left or right
+        if (colmovements[hotcol]>10): #!!
+        #if movement > 80/3: #!!
+            print("Detected movement")
+            #print(movement,col)
             offset = 1 # offset from centre to detect
-            if col>=4+offset:
+            if hotcol>=4+offset:
+                # Movement detected to the right, so move head
                 matrix = self.thermalSensor.readMatrix() # read again to nullify movement
                 self.joint.moveRelativeToCurrent(-self.trackDelta, 0)
-            elif col <=3-offset:
+            elif hotcol <=3-offset:
+                # Movement detected to the left, so move head
                 matrix = self.thermalSensor.readMatrix() # read again to nullify movement
                 self.joint.moveRelativeToCurrent(self.trackDelta, 0)
 
-        return movement,col
+            return True
+
+        return False
 
 
     def detectMovement(self):
@@ -108,11 +120,21 @@ class Head:
            Returns the amount of movement (sum of absolute changes in temeperature of across the matrix)"""
 
         matrix = self.thermalSensor.readMatrix()
-        min,max,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
-        movement,_,_,_ = self.thermalSensor.movement()
-        #print(movement)
-        return movement
+        #min,max,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
+        movement,_,colmovements,hotspot = self.thermalSensor.movement()
 
+        # Get the column which has most movement
+        hotcol = hotspot[1]
+
+        if (colmovements[hotcol]>10): #!!
+        #if movement>80: #!!param
+            #print("movement {}".format(movement))
+            self.thermalSensor.printCols(colmovements)
+            return True
+        else:
+            #print("no movement {}".format(movement))
+            self.thermalSensor.printCols(colmovements)
+            return False
 
     def move(self, position, t=0):
         """Move head to a position from -100 (left) to +100 (right)"""
@@ -125,6 +147,8 @@ class Head:
         distances = []
         self.move(-100, t=2)
         dist = self.distanceSensor.readCm() # throw away first reading as it seems to be dodgy
+
+        # Scan left to right
         for pos in range(-100,101,10):
             self.move(pos, t=0)
             if pos%10==0:
@@ -135,8 +159,16 @@ class Head:
                 dist = self.distanceSensor.readCm()
                 #print([dist1,dist2,dist3],dist)
                 distances.append(dist)
+
+        # Move back to centre
         self.move(0, t=2)
-        return distances, distances.index(min(distances)), distances.index(max(distances))
+
+        # Check for thermal movement
+        self.thermalSensor.readMatrix()
+        sleep(1)
+        movement = self.detectMovement()
+
+        return distances, distances.index(min(distances)), distances.index(max(distances)), movement
 
     def scanLeft(self):
         """Scan left side, reading distances (10 positions).  Returns the distances as a list, and the index of the min and max distance."""
@@ -232,11 +264,13 @@ class Head:
         while self._runningThermalSensor:
             if not self._pauseThermalSensor:
                 matrix = self.thermalSensor.readMatrix()
-                min,max,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
-                self.lastMaxTemperature = max
-                if max>=self.humanDetectMin and max<=self.humanDetectMax:
+                mintemp,maxtemp,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
+                self.lastMaxTemperature = maxtemp
+                self.lastMinTemperature = mintemp
+                if mintemp<self.humanDetectMin and  maxtemp>=self.humanDetectMin and maxtemp<=self.humanDetectMax:
+                    # Note: check mintemp is < minhuman checks that ambient temp is less than human temp.  If not, can't detect humans
                     self._pauseThermalSensor = True
-                    self.interruptCallback("human-detect", max)
+                    self.interruptCallback("human-detect", maxtemp)
             sleep(0.1)                
 
 
@@ -260,7 +294,8 @@ if __name__ == "__main__":
 
     while True:
         col = head.trackMovement()
-        print(col)
+        #print(col)
+        sleep(0.2)
 
     # Scan left to right and read 21 distances
     #dists = head.scan()

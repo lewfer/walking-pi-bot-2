@@ -53,6 +53,9 @@ class Animal():
         self.energy = 1000
         self.age = 0
 
+        # Flag to indicate when we last saw a human
+        self.lastHumanDetectAge = -999
+
         # Helper objects, to idenntify legs and threads
         self._legs = {}                                                  # dictionary to quickly find legs
         self._threads = {}                                               # dictionary to quickly find threads
@@ -176,7 +179,7 @@ class Animal():
         # Sensor thresholds
         self.settings['SHORTDISTANCE'] = 20     # triggers short-distance interrupt when distance less than this
         self.settings['LONGDISTANCE'] = 200     # triggers long-distance interrupt when distance more than this
-        self.settings['HUMANDETECTMIN'] = 26    # triggers human-detect interrupt when heat between min and max
+        self.settings['HUMANDETECTMIN'] = 24    # triggers human-detect interrupt when heat between min and max
         self.settings['HUMANDETECTMAX'] = 30    # triggers human-detect interrupt when head between min and max
 
 
@@ -272,18 +275,29 @@ class Animal():
         # Stop movements ready for scan
         self.stopCurrentAction()
 
+        # Do a scan (move head from side-to-side) looking for short distances
         self.head.pauseSensors()   # pause sensors while we scan
-        distances, minpos, maxpos = self.head.scan()
+        distances, minpos, maxpos, movement = self.head.scan()
         print(distances, minpos, maxpos)
+
+        # Check what we saw
         if distances[minpos] < self.settings['SHORTDISTANCE'] : 
+            # We are too close to something
             if minpos <= 10:  # 10 readings on the left side
                 self.log.info("Veer right")
                 self._handleAction(self.right, "R")
             elif minpos > 10:  # 10 readings on the right side
                 self.log.info("Veer left")
                 self._handleAction(self.left, "L")
-            self._setTimer(2, '*')                   
+            self._setTimer(2, '*')                   # back to default when finished
+        elif movement:
+            # We saw something move
+            self._handleAction(self.detectMovement, "M")
+            print("MMMM")
+            minmax = self.settings['RANDOMTIME']['M']                   # min/max time for action to run (from settings)
+            self._setTimer(random.randint(minmax[0],minmax[1]), 'F')   
         else:
+            # We are not too close to anything
             self._handleAction(self.forward, "F")
         self.head.unPauseSensors()   # turn sensors back on 
 
@@ -458,6 +472,11 @@ class Animal():
 
             if self._interruptId is not None:
                 self._handleInterrupt()
+
+            elif self._currentAction=="M":
+                # Detecting movement, so let's finish that before we allow another random movement
+                pass
+
             elif self.age % 5 == 0: #!!every 5 seconds
                 # No timer, so allow another random, weighted choice
                 # . means no change to current action
@@ -491,7 +510,7 @@ class Animal():
             else:
                 self.alertness -= 1
 
-            # djust age
+            # Adjust age
             self.age += 1
 
             self._printStatus()
@@ -499,16 +518,22 @@ class Animal():
 
     def _printStatus(self):
         """Print out the status for debugging"""
-        self.log.info("\t{} alertness={} energy={} timernext={}_in_{}s threadcount={} interrupt={} dist={}".format(self._currentAction, self.alertness, self.energy, self._timerAction, self._timerDelay, activeCount(), self._interruptId, self.head.lastDistance))
 
-        if self.messageCallback is not None:   
-            line1 = "{}{}{} {}".format(self._currentAction, 
-                        " " if self._timerAction is None else self._timerAction,
-                        self._timerDelay,
-                        self._interruptId if self._interruptId is not None else "")
-            line2 = "d={} t={}".format(self.head.lastDistance,
-                        self.head.lastMaxTemperature)
-            self.messageCallback(line1, line2)
+        if self._interruptId != "human-detect": # and self._currentAction!="M":
+            self.log.info("\t{} age={} alertness={} energy={} timernext={}_in_{}s threadcount={} interrupt={} dist={} temp={},{} human={}".format(
+                self._currentAction, self.age, self.alertness, self.energy, 
+                self._timerAction, self._timerDelay, activeCount(), self._interruptId, 
+                self.head.lastDistance, self.head.lastMinTemperature,self.head.lastMaxTemperature,
+                self.lastHumanDetectAge))
+
+            if self.messageCallback is not None:   
+                line1 = "{}{}{} {}".format(self._currentAction, 
+                            " " if self._timerAction is None else self._timerAction,
+                            self._timerDelay,
+                            self._interruptId if self._interruptId is not None else "")
+                line2 = "d={} t={}".format(self.head.lastDistance,
+                            self.head.lastMaxTemperature)
+                self.messageCallback(line1, line2)
 
         
 
@@ -519,6 +544,17 @@ class Animal():
 
         # Don't allow interrupt to be interrupted
         if self._interruptId is not None:
+            return
+
+        # !! ignore for now
+        if id=="human-detect":
+            #print("Ignoring heat detect")
+            self.head.unPauseSensors()  
+            return
+
+        if id=="human-detect" and self.age-self.lastHumanDetectAge < 60:
+            print("Bored of humans")  
+            self.head.unPauseSensors()  
             return
 
         self.log.info("Interrupt {}".format(id))            
@@ -548,9 +584,13 @@ class Animal():
                 self._setTimer(random.randint(minmax[0],minmax[1]), 'I')    
 
             elif self._interruptId=="human-detect":
-                self.do_detectMovement()
-                minmax = self.settings['RANDOMTIME']['M']   
-                self._setTimer(random.randint(minmax[0],minmax[1]), 'I')    
+                # If we haven't seen a human for a while, stop to detect human
+
+                    self.lastHumanDetectAge = self.age
+                    self.do_detectMovement()
+                    minmax = self.settings['RANDOMTIME']['M']   
+                    self._setTimer(random.randint(minmax[0],minmax[1]), 'I')   
+
 
             elif self._interruptId=="long-distance":
                 self._clearInterrupt()
@@ -1119,6 +1159,8 @@ class Animal():
           
 
     def detectMovement(self):
+        '''Stop and check for movement.  If movement detected, track it for a while'''
+
         # Put in alert state
         self.alert()
 
@@ -1128,30 +1170,23 @@ class Animal():
 
         while True:
             if tracking:
-                values = self.head.trackMovement()
-                if values is None:
-                    #self.log.info("Stopped tracking human")
-                    #break   
-                    pass
-                movement,col = values
-                self._printTracking(col)                
-                if movement>80/2: #!!param
-                    noMovementCount = 0
-                    self.log.info("Still tracking {}".format(movement))
+                # Track the movement that was detected
+                if self.head.trackMovement():
+                    noMovementCount = 0 # reset
+                    #self.log.info("Still tracking")
                 else:
-                    print("No movement")
                     noMovementCount += 1
                     if noMovementCount > 30: #!!
-                        self.log.info("Stopped tracking")
-                        self._setTimer(0, self._timerAction) # start the next action
+                        # Waited for a while and not movement detected, so stop tracking
+                        self.log.info("Stopped tracking due to no movement")
+                        self._setTimer(0, self._timerAction) # start the next action immediately
             else:
-                # Detect movement
-                movement = self.head.detectMovement()
-                if movement is not None:
-                    if movement>80: #!!param
-                        self.log.info("Movement {} so start tracking human".format(movement))
-                        self._setTimer(30, self._timerAction) # delay the next action !!
-                        tracking = True
+                # Keep still and see if there is any movement
+                if self.head.detectMovement():
+                    # Significant movement detected
+                    self.log.info("Movement detected so start tracking human")
+                    self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
+                    tracking = True
 
             # If request was made to end , break out of loop
             if self._stopped:
