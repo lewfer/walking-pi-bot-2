@@ -145,10 +145,13 @@ class RandomAnimal(Animal):
 
         # Stop movements ready for scan
         self.stopCurrentAction()
+        
+        # do_default is a bit like an interrupt
+        self.head.pauseSensors()   # pause sensors while we scan
+        self._pauseInterrupts()
 
         # Do a scan (move head from side-to-side) looking for short distances
         self.log.info("\tScanning")
-        self.head.pauseSensors()   # pause sensors while we scan
         #distances, minpos, maxpos, movement = self.head.scan()
         minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement = self.head.scan()
         print("\tScan minpos={} maxpos={}".format(minPos, maxPos))
@@ -182,12 +185,14 @@ class RandomAnimal(Animal):
             elif shortestRight:  
                 self.log.info("\tObstacle in right, so veer left")
                 self._handleAction(self._left, "L")
-            self._setTimer(self._randint(self.settings['RANDOMTIME']['R']), 'F')                   # back to default when finished
+            self._setTimer(self._randint([4,15]), 'F')                   # back to default when finished !!
         else:
             # We are not too close to anything
             self.log.info("\tNo issues seen, so move F")
             self._handleAction(self._forward, "F")
-        self.head.unPauseSensors()   # turn sensors back on 
+
+        #self.head.unPauseSensors()   # turn sensors back on 
+        #self._unPauseInterrupts()
 
     def endInterrupt(self):
         """Reset back to default behaviour following an interrupt"""
@@ -198,6 +203,7 @@ class RandomAnimal(Animal):
         self.head.move(0, t=1)
         self._handleAction(self._forward, "F")
         self.head.unPauseSensors()   # turn sensors back on for moving forwards
+        self._clearInterrupt()
 
     def do_backward(self):
         self.head.move(0, t=1)
@@ -477,24 +483,25 @@ class RandomAnimal(Animal):
 
             if self._interruptId=="short-distance":
                 # End interrupt so we do default scan
-                self.endInterrupt()
+                #self.endInterrupt()
+                self.do_default()
                 #self.do_backward()
                 #minmax = self.settings['RANDOMTIME']['B']   
                 #self._setTimer(random.randint(minmax[0],minmax[1]), 'I')       
 
             elif self._interruptId=="left-antenna":
-                self.do_right()
-                self._setTimer(self._randint(self.settings['RANDOMTIME']['R']), 'I')    
+                self.do_rightNoCheck()
+                self._setTimer(self._randint(self.settings['RANDOMTIME']['R']), 'F')    
 
             elif self._interruptId=="right-antenna":
-                self.do_left()
-                self._setTimer(self._randint(self.settings['RANDOMTIME']['L']), 'I')    
+                self.do_leftNoCheck()
+                self._setTimer(self._randint(self.settings['RANDOMTIME']['L']), 'F')    
 
             elif self._interruptId=="human-detect":
                 # 
                 self.lastHumanDetectAge = self.age
                 self.do_trackMovement()
-                self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'I')   
+                self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
 
 
             elif self._interruptId=="long-distance":
@@ -512,10 +519,15 @@ class RandomAnimal(Animal):
         self._interruptId = None
         self._interruptBeingHandled = False          
 
-    def _randint(minmax):
+    def _randint(self, minmax):
         return random.randint(minmax[0],minmax[1])
 
+    def _unPauseInterrupts(self):
+        self._clearInterrupt()
 
+    def _pauseInterrupts(self):
+        self._interruptId = "paused"
+        self._interruptBeingHandled = True
 
 if __name__ == "__main__":
     print("Testing RandomAnimal")    

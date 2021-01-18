@@ -47,13 +47,16 @@ class DistanceSensor:
                 continue
 
             if tries>10:
-                print("+",end="")
+                print("+", count,end="")
 
             # Search for the header bytes
             orig_count = count
             while not (recv[0] == 0x59 and recv[1] == 0x59) and count>8: 
                 recv = recv[1:]
                 count -= 1
+
+            if count<8:
+                print(recv)
 
             #print("\tcount",orig_count,count, recv[0], recv[1], recv)
 
@@ -96,4 +99,4 @@ if __name__ == '__main__':
     dist = DistanceSensor(14)
     while True:
         print("dist",dist.readCm())
-        time.sleep(0.2)
+        #time.sleep(0.1)
