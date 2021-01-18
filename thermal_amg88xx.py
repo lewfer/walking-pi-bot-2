@@ -145,9 +145,11 @@ class ThermalSensor:
                 colSumAbs[c] += abs(temp)           
         return sumAbs, rowSumAbs, colSumAbs
 
-    def printCols(self,cols):
+    def printCols(self,cols, indent=""):
+        print(indent, end="")
         for c in cols: print("{:>5.2f} ".format(c), end="")
         print("")
+        print(indent, end="")
         print("      "*cols.index(max(cols)), " ^")
 
     def printMatrix(self):

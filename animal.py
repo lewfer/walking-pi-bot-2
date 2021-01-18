@@ -111,7 +111,7 @@ class Animal():
             '-':'do_crawl()',
             'I':'endInterrupt()',
             'M':'do_detectMovement()',
-            'T':'do_trackHotspot()'
+            'T':'do_trackMovement()'
             }
 
         self.log.info("Created Animal")
@@ -160,7 +160,7 @@ class Animal():
         self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  2,  1,  1,  20,  1]
 
         # Min/max time for action to run
-        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'+':[2,10],'-':[2,10]}
+        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[10,20],'+':[2,10],'-':[2,10]}
 
         # Number of seconds to wait before generating another random action
         self.settings['TICKPERIOD'] = 1
@@ -278,7 +278,7 @@ class Animal():
         # Do a scan (move head from side-to-side) looking for short distances
         self.head.pauseSensors()   # pause sensors while we scan
         distances, minpos, maxpos, movement = self.head.scan()
-        print("Scan {} minpos={} maxpos={}".format(distances, minpos, maxpos))
+        print("\tScan {} minpos={} maxpos={}".format(distances, minpos, maxpos))
 
         # Check what we saw
         if distances[minpos] < self.settings['SHORTDISTANCE'] : 
@@ -292,9 +292,8 @@ class Animal():
             self._setTimer(2, '*')                   # back to default when finished
         elif movement:
             # We saw something move
-            self._handleAction(self.detectMovement, "M")
-            print("MMMM")
-            minmax = self.settings['RANDOMTIME']['M']                   # min/max time for action to run (from settings)
+            self._handleAction(self.trackMovement, "T")
+            minmax = self.settings['RANDOMTIME']['T']                   # min/max time for action to run (from settings)
             self._setTimer(random.randint(minmax[0],minmax[1]), 'F')   
         else:
             # We are not too close to anything
@@ -320,7 +319,7 @@ class Animal():
         self.log.info("Check left")
         self.head.pauseSensors()   # pause sensors while we scan
         distances, minpos, maxpos = self.head.scanLeft()
-        print(distances, minpos, maxpos)
+        print("{} minpos={} maxpos={}".format(distances, minpos, maxpos))
         clear = distances[minpos] > self.settings['SHORTDISTANCE']
         self.head.unPauseSensors()   # turn sensors back on 
         return clear
@@ -330,13 +329,13 @@ class Animal():
         self.log.info("Check right")
         self.head.pauseSensors()   # pause sensors while we scan
         distances, minpos, maxpos = self.head.scanRight()
-        print(distances, minpos, maxpos)
+        print("{} minpos={} maxpos={}".format(distances, minpos, maxpos))
         clear = distances[minpos] > self.settings['SHORTDISTANCE']
         self.head.unPauseSensors()   # turn sensors back on 
         return clear
 
     def do_left(self):
-        print("Do left")
+        #print("Do left")
         # Stop movements ready for scan
         self.stopCurrentAction()
         
@@ -349,7 +348,7 @@ class Animal():
             self.do_backward()
 
     def do_right(self):
-        print("Do right")
+        #print("Do right")
         # Stop movements ready for scan
         self.stopCurrentAction()
 
@@ -394,8 +393,8 @@ class Animal():
     def do_detectMovement(self):
         self._handleAction(self.detectMovement, "M")
 
-    def do_trackHotspot(self):
-        self._handleAction(self.trackHotspot, "T")
+    def do_trackMovement(self):
+        self._handleAction(self.trackMovement, "T")
     
     def do_run(self):
         self._handleAction(self.run, "+")
@@ -428,18 +427,18 @@ class Animal():
 
     def _handleAction(self, func, msg):  
         """Stop any current action and start a new one"""
-        self.log.info("Handling {}".format(msg))
+        self.log.info("_handleAction {}".format(msg))
         self._stopMovements()
         if self._actionThread: self._actionThread.join()
         if func is not None:
-            self.log.info("Start {} thread".format(msg))
+            self.log.info("\tStart {} thread".format(msg))
             self._actionThread = Thread(target=func)
             self._actionThread.start()   
         self._currentAction = msg
 
     def _setTimer(self, delay, action):
         """Cancel any existing timer and replace with this one.  Timers are used to """
-        print("timer", action, delay)
+        #print("timer", action, delay)
         #self.log.info("Set timer {} in {} secs".format(action, delay))
         #if self.timer is not None:
         #    self.timer.cancel()
@@ -451,7 +450,7 @@ class Animal():
 
     def _executeTimer(self):
         #!!surely need to stop previous action?
-        print("Execute", self._timerAction)
+        print("_executeTimer", self._timerAction)
         action = self._timerAction
         self._timerAction = None
         self._timerDelay = 0
@@ -587,12 +586,11 @@ class Animal():
                 self._setTimer(random.randint(minmax[0],minmax[1]), 'I')    
 
             elif self._interruptId=="human-detect":
-                # If we haven't seen a human for a while, stop to detect human
-
-                    self.lastHumanDetectAge = self.age
-                    self.do_detectMovement()
-                    minmax = self.settings['RANDOMTIME']['M']   
-                    self._setTimer(random.randint(minmax[0],minmax[1]), 'I')   
+                # 
+                self.lastHumanDetectAge = self.age
+                self.do_trackMovement()
+                minmax = self.settings['RANDOMTIME']['T']   
+                self._setTimer(random.randint(minmax[0],minmax[1]), 'I')   
 
 
             elif self._interruptId=="long-distance":
@@ -1198,7 +1196,38 @@ class Animal():
                 self.log.info("Stopped detect movement")
                 break         
 
-            sleep(0.2)           
+            sleep(0.2)       
+
+    def trackMovement(self):
+        '''Stop and check for movement.  If movement detected, track it for a while'''
+
+        self._stopped = False
+
+        # Put in alert state
+        self.alert()
+
+        self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
+
+        noMovementCount = 0
+
+        while True:
+            # Track the movement that was detected
+            if self.head.trackMovement():
+                noMovementCount = 0 # reset
+                #self.log.info("Still tracking")
+            else:
+                noMovementCount += 1
+                if noMovementCount > 30: #!!
+                    # Waited for a while and not movement detected, so stop tracking
+                    self.log.info("Stopped tracking due to no movement")
+                    self._setTimer(0, self._timerAction) # start the next action immediately
+
+            # If request was made to end , break out of loop
+            if self._stopped:
+                self.log.info("Stopped detect movement")
+                break         
+
+            sleep(0.2)                   
 
     def trackHotspot(self):
         # Put in alert state

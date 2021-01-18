@@ -87,7 +87,7 @@ class Head:
         # Unpack movement values
         movement,_,colmovements,hotspot = values
         #print("Movement {: 5.2f} Thermal columns ".format(movement), end="")
-        self.thermalSensor.printCols(colmovements)
+        self.thermalSensor.printCols(colmovements, indent="\t")
         #for c in colmovements: print("{: 5.2f} ".format(c), end="")
         #print("")
         #print("                               ", "      "*colmovements.index(max(colmovements)), "^")
@@ -129,11 +129,11 @@ class Head:
         if (colmovements[hotcol]>10): #!!
         #if movement>80: #!!param
             #print("movement {}".format(movement))
-            self.thermalSensor.printCols(colmovements)
+            self.thermalSensor.printCols(colmovements, indent="\t")
             return True
         else:
             #print("no movement {}".format(movement))
-            self.thermalSensor.printCols(colmovements)
+            self.thermalSensor.printCols(colmovements, indent="\t")
             return False
 
     def move(self, position, t=0):
