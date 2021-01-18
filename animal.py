@@ -32,7 +32,6 @@ from gpiozero import Button
 # -------------------------------------------------------------------------------------------------
 SETTINGSFILENAME = 'animal_settings.json'
 
-    
 
 # Class
 # -------------------------------------------------------------------------------------------------
@@ -53,28 +52,15 @@ class Animal():
         self.energy = 1000
         self.age = 0
 
-        # Flag to indicate when we last saw a human
-        self.lastHumanDetectAge = -999
-
         # Helper objects, to idenntify legs and threads
         self._legs = {}                                                  # dictionary to quickly find legs
         self._threads = {}                                               # dictionary to quickly find threads
 
-        # Manage current and next action
-        self._currentAction = None              # current action being run (one-letter code)
-        self._actionThread = None               # thread on which current action is running
-        self._timerDelay = 0                    # delay before next action runs
-        self._timerAction = None                # action to run next (one-letter code)
-        self._timerAgeStart = 0                 # age of robot when timer was started
-        self._interruptId = None                # the current interrupt, if any
-        self._interruptValue = None             # value associated with the interrupt
-        self._interruptBeingHandled = None      # if we are currently executing the interrupt handling action
-        self._threadCount = 0                   # so we can track threads
-        self._stopped = False                   # flag to indicate if we want the animal to stop what it is doing (i.e. stop current thread)
 
-        # Random action generator
-        self._randomThread = None        # thread on which random action generator runs
-        self._runningRandom = False      # flag to indicate that random thread is running
+        self._actionThread = None               # thread on which current action is running
+        self._threadCount = 0                   # so we can track threads
+
+        self._stopped = False                   # flag to indicate if we want the animal to stop what it is doing (i.e. stop current thread)
 
         # Antennae handlers
         self.leftAntenna.when_pressed = self._leftAntennaPressed
@@ -89,31 +75,6 @@ class Animal():
 
         # Caller can register a callback to receive messages (for display purposes)
         self.messageCallback = None
-
-        # List of one-letter action codes and the associated actions
-        self.actionFunction = {
-            '*':'do_default()',
-            'F':'do_forward()', 
-            'B':'do_backward()',
-            'L':'do_left()',
-            'R':'do_right()',
-            'W':'do_wait()',
-            'U':'do_unwind()',
-            'P':'do_point()',
-            'E':'do_eat()',
-            'S':'do_sit()',
-            '^':'do_kneesup()',
-            'v':'do_kneesdown()',
-            '<':'do_hipsbackward()',
-            '>':'do_hipsforward()',
-            'A':'do_alert()',
-            '+':'do_run()',
-            '-':'do_crawl()',
-            'I':'endInterrupt()',
-            'M':'do_detectMovement()',
-            'T':'do_trackMovement()'
-            }
-
         self.log.info("Created Animal")
 
 
@@ -135,6 +96,8 @@ class Animal():
 
         self.numLegs += 2
 
+    def interrupt(self, id, value):
+        pass
 
     # Settings 
     # ---------------------------------------------------------------------------------------------
@@ -155,34 +118,6 @@ class Animal():
 
         self.settings['STEPSPERDEGREE'] = 1
 
-        # Weights for random movement action choices
-        #                                 ['.','S','B','L','R','U','P','E','A','+','-']
-        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  2,  1,  1,  20,  1]
-
-        # Min/max time for action to run
-        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[10,20],'+':[2,10],'-':[2,10]}
-
-        # Number of seconds to wait before generating another random action
-        self.settings['TICKPERIOD'] = 1
-
-        # Number of alertness points to add for each tick when the animal is unwinding
-        self.settings['UNWINDALERTNESSINCREASE'] = 5
-
-        # Head movement range in degrees
-        self.settings['HEADHIGHANGLE'] = 135
-        self.settings['HEADLOWANGLE'] = 45
-        self.settings['HEADMIDANGLE'] = 90
-
-        # Change in head angle when tracking
-        self.settings['HEADTRACKDELTA'] = 10
-
-        # Sensor thresholds
-        self.settings['SHORTDISTANCE'] = 20     # triggers short-distance interrupt when distance less than this
-        self.settings['LONGDISTANCE'] = 200     # triggers long-distance interrupt when distance more than this
-        self.settings['HUMANDETECTMIN'] = 24    # triggers human-detect interrupt when heat between min and max
-        self.settings['HUMANDETECTMAX'] = 30    # triggers human-detect interrupt when head between min and max
-
-
     def loadSettings(self):
         '''Load the settings file, which contains the calibrated settings for each joint'''
         self.setDefaultSettings()
@@ -200,7 +135,7 @@ class Animal():
         self.log.info(self.settings)
 
         self.applySettings()
-
+        
     def applySettings(self):
         # Now set the default angles for each joint.  We need to mirror the angles left and right legs 
         for pair in range(len(self.legPairs)):
@@ -262,351 +197,7 @@ class Animal():
             self.legPairs[pair].left.hip.stepsPerDegree = spd
             self.legPairs[pair].left.knee.stepsPerDegree = spd
             self.legPairs[pair].right.hip.stepsPerDegree = spd
-            self.legPairs[pair].right.knee.stepsPerDegree = spd
-
-
-    # Handlers for actions 
-    # ---------------------------------------------------------------------------------------------
-
-    def do_default(self):
-        """Do the default action, which is to look around and move off left, right or forward"""
-        print("Do default")
-
-        # Stop movements ready for scan
-        self.stopCurrentAction()
-
-        # Do a scan (move head from side-to-side) looking for short distances
-        self.head.pauseSensors()   # pause sensors while we scan
-        distances, minpos, maxpos, movement = self.head.scan()
-        print("\tScan {} minpos={} maxpos={}".format(distances, minpos, maxpos))
-
-        # Check what we saw
-        if distances[minpos] < self.settings['SHORTDISTANCE'] : 
-            # We are too close to something
-            if minpos <= 10:  # 10 readings on the left side
-                self.log.info("Veer right")
-                self._handleAction(self.right, "R")
-            elif minpos > 10:  # 10 readings on the right side
-                self.log.info("Veer left")
-                self._handleAction(self.left, "L")
-            self._setTimer(2, '*')                   # back to default when finished
-        elif movement:
-            # We saw something move
-            self._handleAction(self.trackMovement, "T")
-            minmax = self.settings['RANDOMTIME']['T']                   # min/max time for action to run (from settings)
-            self._setTimer(random.randint(minmax[0],minmax[1]), 'F')   
-        else:
-            # We are not too close to anything
-            self._handleAction(self.forward, "F")
-        self.head.unPauseSensors()   # turn sensors back on 
-
-    def endInterrupt(self):
-        """Reset back to default behaviour following an interrupt"""
-        self._clearInterrupt()
-        self.do_default()
-
-    def do_forward(self):
-        self.head.move(0, t=1)
-        self._handleAction(self.forward, "F")
-        self.head.unPauseSensors()   # turn sensors back on for moving forwards
-
-    def do_backward(self):
-        self.head.move(0, t=1)
-        self._handleAction(self.backward, "B")
-
-    def clear_left(self):
-        """Check if all clear on the left"""
-        self.log.info("Check left")
-        self.head.pauseSensors()   # pause sensors while we scan
-        distances, minpos, maxpos = self.head.scanLeft()
-        print("{} minpos={} maxpos={}".format(distances, minpos, maxpos))
-        clear = distances[minpos] > self.settings['SHORTDISTANCE']
-        self.head.unPauseSensors()   # turn sensors back on 
-        return clear
-
-    def clear_right(self):
-        """Check if all clear on the right"""
-        self.log.info("Check right")
-        self.head.pauseSensors()   # pause sensors while we scan
-        distances, minpos, maxpos = self.head.scanRight()
-        print("{} minpos={} maxpos={}".format(distances, minpos, maxpos))
-        clear = distances[minpos] > self.settings['SHORTDISTANCE']
-        self.head.unPauseSensors()   # turn sensors back on 
-        return clear
-
-    def do_left(self):
-        #print("Do left")
-        # Stop movements ready for scan
-        self.stopCurrentAction()
-        
-        if self.clear_left():
-            self.head.move(-100, t=1)
-            self._handleAction(self.left, "L")
-        elif not self.clear_right():
-            # In a pickle
-            self.log.info("In a pickle")
-            self.do_backward()
-
-    def do_right(self):
-        #print("Do right")
-        # Stop movements ready for scan
-        self.stopCurrentAction()
-
-        if self.clear_right():      
-            self.head.move(100, t=1)
-            self._handleAction(self.right, "R")
-        elif not self.clear_left():
-            # In a pickle
-            self.log.info("In a pickle")
-            self.do_backward()
-
-    def do_wait(self):
-        self._handleAction(None, "W")
-
-    def do_unwind(self):
-        self._handleAction(self.unwind, "U")
-
-    def do_point(self):
-        self._handleAction(self.point, "P")
-
-    def do_eat(self):
-        self._handleAction(self.eat, "E")
-
-    def do_sit(self):
-        self._handleAction(self.sit, "S")
-
-    def do_kneesup(self):
-        self._handleAction(self.kneesup, "^")
-
-    def do_kneesdown(self):
-        self._handleAction(self.kneesdown, "v")
-
-    def do_hipsbackward(self):
-        self._handleAction(self.hipsbackward, "<")
-
-    def do_hipsforward(self):
-        self._handleAction(self.hipsforward, ">")
-
-    def do_alert(self):
-        self._handleAction(self.alert, "A")
-
-    def do_detectMovement(self):
-        self._handleAction(self.detectMovement, "M")
-
-    def do_trackMovement(self):
-        self._handleAction(self.trackMovement, "T")
-    
-    def do_run(self):
-        self._handleAction(self.run, "+")
-
-    def do_crawl(self):
-        self._handleAction(self.crawl, "-")
-
-
-    # Action management
-    # ---------------------------------------------------------------------------------------------
-
-    def start(self):
-        """Start the robot"""
-        self.do_forward()
-        self.head.startSensors()
-        self._startRandom()
-
-    def stop(self):
-        """Stop the robot"""
-        #self.showMessage("Stopping","")
-        self.log.info("Stopping")
-        self._handleAction(None, "W")
-        self.head.stopSensors()
-        self._runningRandom = False
-        
-    def stopCurrentAction(self):
-        self._stopMovements()
-        if self._actionThread: self._actionThread.join()
-
-
-    def _handleAction(self, func, msg):  
-        """Stop any current action and start a new one"""
-        self.log.info("_handleAction {}".format(msg))
-        self._stopMovements()
-        if self._actionThread: self._actionThread.join()
-        if func is not None:
-            self.log.info("\tStart {} thread".format(msg))
-            self._actionThread = Thread(target=func)
-            self._actionThread.start()   
-        self._currentAction = msg
-
-    def _setTimer(self, delay, action):
-        """Cancel any existing timer and replace with this one.  Timers are used to """
-        #print("timer", action, delay)
-        #self.log.info("Set timer {} in {} secs".format(action, delay))
-        #if self.timer is not None:
-        #    self.timer.cancel()
-        self._timerAgeStart = self.age
-        #self.timer = Timer(delay, self.actionFunction[action])
-        #self.timer.start()
-        self._timerDelay = delay
-        self._timerAction = action
-
-    def _executeTimer(self):
-        #!!surely need to stop previous action?
-        print("_executeTimer", self._timerAction)
-        action = self._timerAction
-        self._timerAction = None
-        self._timerDelay = 0
-        self._timerAgeStart = 0
-        exec("self."+self.actionFunction[action])
-
-    def _startRandom(self):
-        """Start a random behaviour generator"""
-        self._randomThread = Thread(target=self._runRandom)
-        self._randomThread.start() 
-
-    def _runRandom(self):
-        """Continue to run random actions until stopped"""
-        self._runningRandom = True
-        while self._runningRandom:
-            if self._timerAction is not None:
-                if self.age-self._timerAgeStart >= self._timerDelay:
-                    # There is a timer that has come of age, so execute it
-                    self._executeTimer()
-                    continue
-
-            if self._interruptId is not None:
-                self._handleInterrupt()
-
-            elif self._currentAction=="M":
-                # Detecting movement, so let's finish that before we allow another random movement
-                pass
-
-            elif self.age % 5 == 0: #!!every 5 seconds
-                # No timer, so allow another random, weighted choice
-                # . means no change to current action
-                actions = ['.','S','B','L','R','U','P','E','A','+','-']
-                weights = self.settings['RANDOMWEIGHTS']
-                choice = random.choices(actions, weights)[0]
-                self.log.info("random {}".format(choice))
-
-                # Don't allow run if not enough space
-                if choice=='+':
-                    if self.head.lastDistance is None:
-                        choice = '.'
-                    elif self.head.lastDistance<200: #!!
-                        self.log.info("Not enough distance to run")
-                        choice = '.'
-                    else:
-                        pass # !! set time proportional to last distance?
-
-                # Start the choice, and set a timer to start moving forward again after a random period
-                if choice != '.':
-                    self.log.info("Initiating action {}".format(choice))
-                    exec("self."+self.actionFunction[choice])
-                    minmax = self.settings['RANDOMTIME'][choice]    # min/max time for action to run (from settings)
-                    self._setTimer(random.randint(minmax[0],minmax[1]), '*')                   
-
-            sleep(self.settings['TICKPERIOD'])
-
-            # Adjust alertness
-            if self._currentAction=='U':
-                self.alertness += self.settings['UNWINDALERTNESSINCREASE']
-            else:
-                self.alertness -= 1
-
-            # Adjust age
-            self.age += 1
-
-            self._printStatus()
-
-
-    def _printStatus(self):
-        """Print out the status for debugging"""
-
-        if self._interruptId != "human-detect": # and self._currentAction!="M":
-            self.log.info("\t{} age={} alertness={} energy={} timernext={}_in_{}s threadcount={} interrupt={} dist={} temp={},{} human={}".format(
-                self._currentAction, self.age, self.alertness, self.energy, 
-                self._timerAction, self._timerDelay, activeCount(), self._interruptId, 
-                self.head.lastDistance, self.head.lastMinTemperature,self.head.lastMaxTemperature,
-                self.lastHumanDetectAge))
-
-            if self.messageCallback is not None:   
-                line1 = "{}{}{} {}".format(self._currentAction, 
-                            " " if self._timerAction is None else self._timerAction,
-                            self._timerDelay,
-                            self._interruptId if self._interruptId is not None else "")
-                line2 = "d={} t={}".format(self.head.lastDistance,
-                            self.head.lastMaxTemperature)
-                self.messageCallback(line1, line2)
-
-        
-
-
-    # Interrupt handling
-    # ---------------------------------------------------------------------------------------------
-    def interrupt(self, id, value):
-
-        # Don't allow interrupt to be interrupted
-        if self._interruptId is not None:
-            return
-
-        # !! ignore for now
-        if id=="human-detect":
-            #print("Ignoring heat detect")
-            self.head.unPauseSensors()  
-            return
-
-        if id=="human-detect" and self.age-self.lastHumanDetectAge < 60:
-            print("Bored of humans")  
-            self.head.unPauseSensors()  
-            return
-
-        self.log.info("Interrupt {}".format(id))            
-
-        self._interruptId = id
-        self._interruptValue = value
-
-    def _handleInterrupt(self):
-        # Handle the interrupt
-        if not self._interruptBeingHandled:
-            self.log.info("Handle Interrupt {}".format(self._interruptId))
-            self._interruptBeingHandled = True
-
-            if self._interruptId=="short-distance":
-                self.do_backward()
-                minmax = self.settings['RANDOMTIME']['B']   
-                self._setTimer(random.randint(minmax[0],minmax[1]), 'I')       
-
-            elif self._interruptId=="left-antenna":
-                self.do_right()
-                minmax = self.settings['RANDOMTIME']['R']   
-                self._setTimer(random.randint(minmax[0],minmax[1]), 'I')    
-
-            elif self._interruptId=="right-antenna":
-                self.do_left()
-                minmax = self.settings['RANDOMTIME']['L']   
-                self._setTimer(random.randint(minmax[0],minmax[1]), 'I')    
-
-            elif self._interruptId=="human-detect":
-                # 
-                self.lastHumanDetectAge = self.age
-                self.do_trackMovement()
-                minmax = self.settings['RANDOMTIME']['T']   
-                self._setTimer(random.randint(minmax[0],minmax[1]), 'I')   
-
-
-            elif self._interruptId=="long-distance":
-                self._clearInterrupt()
-                self.head.unPauseSensors()  
-            """
-                self.do_run()
-                #minmax = self.settings['RANDOMTIME']['R']
-                minmax[0] = 2
-                minmax[1] = self._interruptValue / 20 # run time proportional to distance measured
-                self._setTimer(random.randint(minmax[0],minmax[1]), 'I')
-            """
-
-    def _clearInterrupt(self):
-        self._interruptId = None
-        self._interruptBeingHandled = False          
+            self.legPairs[pair].right.knee.stepsPerDegree = spd        
 
     # Sensors
     # ---------------------------------------------------------------------------------------------
@@ -665,7 +256,33 @@ class Animal():
         
         #self.log.debug("Stopped threads: {}".format(activeCount()))
 
+    def _stopMovements(self):
+        '''Stop the servos and threads'''
+        #self._stopped = True
 
+        # Stop all servos
+        for pair in range(len(self.legPairs)):
+            self.legPairs[pair].left.stop()
+            self.legPairs[pair].right.stop()
+
+        # Stop all threads
+        self._stopThreads()
+
+    def stopCurrentAction(self):
+        #self._stopMovements()
+        self._stopped = True
+        if self._actionThread: self._actionThread.join()
+
+
+    def runAction(self, func):  
+        """Stop any current action and start a new one"""
+        self.log.info("runAction {}".format(func.__name__))
+        #self._stopMovements()
+        self.stopCurrentAction()
+        #if self._actionThread: self._actionThread.join()
+        if func is not None:
+            self._actionThread = Thread(target=func)
+            self._actionThread.start()   
 
 
 
@@ -677,13 +294,13 @@ class Animal():
         sleep(random.randint(0,self.settings['RANDOMWAIT'])/10.0) 
 
 
-    def run(self):
-        self.forward(speed=2)
+    def _run(self):
+        self._forward(speed=4)
 
-    def crawl(self):
-        self.forward(speed=0.5)        
+    def _crawl(self):
+        self._forward(speed=0.5)        
 
-    def forward(self, speed=1):
+    def _forward(self, speed=1):
         '''Move forward'''
                 
         self._stopped = False
@@ -750,8 +367,10 @@ class Animal():
             if self._stopped:
                 break   
 
+        self._stopMovements()
 
-    def backward(self):
+
+    def _backward(self):
         '''Move backward'''
                 
         self._stopped = False
@@ -818,7 +437,156 @@ class Animal():
             if self._stopped:
                 break  
 
-    def right(self):
+        self._stopMovements()
+
+
+    def _backLeft(self):
+        '''Move backward and left'''
+                
+        self._stopped = False
+
+        t1 = self.settings['REACHTIME']
+        t2 = self.settings['PUSHTIME']
+
+        # Move left legs into position
+        self._runOnThread('L0', 'reachBackward', {'t':t1})
+        self._joinThreads(['L0'])
+        self._waitRandom() 
+        if self.numLegs > 2:
+            self._runOnThread('L1', 'kneeFullUp', {'t':t1})
+            self._joinThreads(['L1'])
+            self._waitRandom() 
+        if self.numLegs > 4:
+            self._runOnThread('L2', 'kneeFullUp', {'t':t1})
+            self._joinThreads(['L2'])
+            self._waitRandom() 
+
+        while True:
+            # Move limbs backwards, one at a time
+            # ----------------------------------
+                        
+            # Move front right leg
+            self._runOnThread('R0', 'reachBackward', {'t':t1})
+            self._joinThreads(['R0'])
+            self._waitRandom() 
+
+            if self.numLegs > 2:
+                # Move middle right leg
+                self._runOnThread('R1', 'reachBackward', {'t':t1})
+                self._joinThreads(['R1'])
+                self._waitRandom() 
+
+            if self.numLegs > 4:
+                # Move rear right leg
+                self._runOnThread('R2', 'reachBackward', {'t':t1})
+                self._joinThreads(['R2'])
+                self._waitRandom() 
+
+            # Move limbs forwards together
+            # -----------------------------
+
+            # Move front right leg
+            self._runOnThread('R0', 'pushForward', {'t':t2})
+            legs = ['L0','R0']
+
+            if self.numLegs > 2:
+                # Move middle right leg
+                sleep(self.settings['PUSHDELAY'])
+                self._runOnThread('R1', 'pushForward', {'t':t2})
+                legs += ['L1','R1']
+
+            if self.numLegs > 4:
+                # Move rear right leg
+                sleep(self.settings['PUSHDELAY'])
+                self._runOnThread('R2', 'pushForward', {'t':t2})
+                legs += ['L2','R2']
+
+            # Wait for all legs to stop
+            self._joinThreads(legs)
+
+            # If request was made to end walk, break out of loop
+            if self._stopped:
+                break  
+
+        self._stopMovements()
+
+
+    def _backRight(self):
+        '''Move backward and right'''
+                
+        self._stopped = False
+
+
+        t1 = self.settings['REACHTIME']
+        t2 = self.settings['PUSHTIME']
+
+        # Move right legs into position
+        self._runOnThread('R0', 'reachBackward', {'t':t1})
+        self._joinThreads(['R0'])
+        self._waitRandom() 
+        if self.numLegs > 2:
+            self._runOnThread('R1', 'reachBackward', {'t':t1})
+            self._joinThreads(['R1'])
+            self._waitRandom() 
+        if self.numLegs > 4:
+            self._runOnThread('R2', 'reachBackward', {'t':t1})
+            self._joinThreads(['R2'])
+            self._waitRandom() 
+
+        while True:
+            # Move limbs backwards, one at a time
+            # ----------------------------------
+                        
+
+            # Move front left leg 
+            self._runOnThread('L0', 'reachBackward', {'t':t1})
+            self._joinThreads(['L0'])  
+            self._waitRandom()           
+
+            if self.numLegs > 2:
+                # Move middle left leg
+                self._runOnThread('L1', 'reachBackward', {'t':t1})
+                self._joinThreads(['L1'])
+                self._waitRandom() 
+
+            if self.numLegs > 4:
+                # Move rear left leg
+                self._runOnThread('L2', 'reachBackward', {'t':t1})
+                self._joinThreads(['L2'])
+                self._waitRandom() 
+
+
+            # Move limbs forwards together
+            # -----------------------------
+
+            # Move left front leg
+            self._runOnThread('L0', 'pushForward', {'t':t2})
+            legs = ['L0','R0']
+
+            if self.numLegs > 2:
+                # Move middle left leg
+                sleep(self.settings['PUSHDELAY'])
+                self._runOnThread('L1', 'pushForward', {'t':t2})
+                legs += ['L1','R1']
+
+            if self.numLegs > 4:
+                # Move rear left leg
+                sleep(self.settings['PUSHDELAY'])
+                self._runOnThread('L2', 'pushForward', {'t':t2})
+                legs += ['L2','R2']
+
+            # Wait for all legs to stop
+            self._joinThreads(legs)
+
+            # If request was made to end walk, break out of loop
+            if self._stopped:
+                break  
+
+        self._stopMovements()
+
+
+
+    def _right(self):
         '''Move right'''
                 
         self._stopped = False
@@ -886,7 +654,10 @@ class Animal():
             if self._stopped:
                 break    
 
-    def left(self):
+        self._stopMovements()
+
+
+    def _left(self):
         '''Move left'''
                 
         self._stopped = False
@@ -951,7 +722,10 @@ class Animal():
             if self._stopped:
                 break  
 
-    def point(self):
+        self._stopMovements()
+
+
+    def _point(self):
         '''Point'''
 
         self._stopped = False
@@ -992,9 +766,11 @@ class Animal():
             if self._stopped:
                 break   
 
-    def eat(self):
+        self._stopMovements()
+
+
+    def _eat(self):
         '''Eat'''
-        self.log.info("eat")
 
         self._stopped = False
         t = 1
@@ -1033,6 +809,9 @@ class Animal():
             if self._stopped:
                 break               
 
+        self._stopMovements()
+
+
     def wakeSlowly(self, t=5):
         '''Move all legs slowly to their mid position.  The slow wake prevents a surge in current draw that could shut down the Pi.'''
        
@@ -1046,9 +825,12 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'mid', {'t':t})
             self._runOnThread(right, 'mid', {'t':t})
+
+        # Wait for all threads to stop
         self._joinThreads(threads)
 
-    def unwind(self, t=1):
+
+    def _unwind(self, t=1):
         '''Put the animal into a relaxing state (crouched down)'''
         
         self._stopped = False
@@ -1061,10 +843,12 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'unwind', {'t':t})
             self._runOnThread(right, 'unwind', {'t':t})
+
+        # Wait for all threads to stop
         self._joinThreads(threads)
 
 
-    def alert(self, t=1):
+    def _alert(self, t=1):
         '''Put the animal into an alert state (standing upright)'''
         
         self._stopped = False
@@ -1077,10 +861,12 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'alert', {'t':t})
             self._runOnThread(right, 'alert', {'t':t})
+
+        # Wait for all threads to stop
         self._joinThreads(threads) 
 
 
-    def sit(self, t=1):
+    def _sit(self, t=1):
         '''Put the animal into an sitting state'''
         
         self._stopped = False
@@ -1093,10 +879,12 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'sit', {'t':t})
             self._runOnThread(right, 'sit', {'t':t})    
+
+        # Wait for all threads to stop
         self._joinThreads(threads)         
    
 
-    def kneesup(self, t=1):
+    def _kneesup(self, t=1):
         '''Lift knees all the way up'''
         
         self._stopped = False
@@ -1109,10 +897,12 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'kneeFullUp', {'t':t})
             self._runOnThread(right, 'kneeFullUp', {'t':t})            
+
+        # Wait for all threads to stop
         self._joinThreads(threads)                     
        
 
-    def kneesdown(self, t=1):
+    def _kneesdown(self, t=1):
         '''Put knees all the way down'''
         
         self._stopped = False
@@ -1125,9 +915,11 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'kneeFullDown', {'t':t})
             self._runOnThread(right, 'kneeFullDown', {'t':t})            
+
+        # Wait for all threads to stop
         self._joinThreads(threads)    
           
-    def hipsbackward(self, t=1):
+    def _hipsbackward(self, t=1):
         '''Push hips all the way backwards'''
         
         self._stopped = False
@@ -1140,10 +932,12 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'hipFullBackward', {'t':t})
             self._runOnThread(right, 'hipFullBackward', {'t':t})            
+
+        # Wait for all threads to stop
         self._joinThreads(threads)                     
        
 
-    def hipsforward(self, t=1):
+    def _hipsforward(self, t=1):
         '''Push hips all the way forwards'''
         
         self._stopped = False
@@ -1156,40 +950,28 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'hipFullForward', {'t':t})
             self._runOnThread(right, 'hipFullForward', {'t':t})            
+
+        # Wait for all threads to stop
         self._joinThreads(threads)    
           
 
-    def detectMovement(self):
-        '''Stop and check for movement.  If movement detected, track it for a while'''
+    def _detectMovement(self):
+        '''Stop and check for movement. '''
 
         self._stopped = False
 
         # Put in alert state
-        self.alert()
-
-        tracking = False
+        self._alert()
 
         noMovementCount = 0
 
         while True:
-            if tracking:
-                # Track the movement that was detected
-                if self.head.trackMovement():
-                    noMovementCount = 0 # reset
-                    #self.log.info("Still tracking")
-                else:
-                    noMovementCount += 1
-                    if noMovementCount > 30: #!!
-                        # Waited for a while and not movement detected, so stop tracking
-                        self.log.info("Stopped tracking due to no movement")
-                        self._setTimer(0, self._timerAction) # start the next action immediately
-            else:
-                # Keep still and see if there is any movement
-                if self.head.detectMovement():
-                    # Significant movement detected
-                    self.log.info("Movement detected so start tracking human")
-                    self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
-                    tracking = True
+            # Keep still and see if there is any movement
+            if self.head.detectMovement():
+                # Significant movement detected
+                self.log.info("Movement detected")
+                #self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
+                #!! would want to do something, e.g. track or call back 
 
             # If request was made to end , break out of loop
             if self._stopped:
@@ -1198,15 +980,15 @@ class Animal():
 
             sleep(0.2)       
 
-    def trackMovement(self):
+    def _trackMovement(self):
         '''Stop and check for movement.  If movement detected, track it for a while'''
 
         self._stopped = False
 
         # Put in alert state
-        self.alert()
+        self._alert()
 
-        self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
+        #self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
 
         noMovementCount = 0
 
@@ -1220,18 +1002,19 @@ class Animal():
                 if noMovementCount > 30: #!!
                     # Waited for a while and not movement detected, so stop tracking
                     self.log.info("Stopped tracking due to no movement")
-                    self._setTimer(0, self._timerAction) # start the next action immediately
+                    #self._setTimer(0, self._timerAction) # start the next action immediately
+                    self._stopped = True
 
             # If request was made to end , break out of loop
             if self._stopped:
-                self.log.info("Stopped detect movement")
+                self.log.info("Stopped track movement")
                 break         
 
             sleep(0.2)                   
 
-    def trackHotspot(self):
+    def _trackHotspot(self):
         # Put in alert state
-        self.alert()
+        self._alert()
 
         self.log.info("Tracking human")
 
@@ -1281,17 +1064,6 @@ class Animal():
     """
 
 
-    def _stopMovements(self):
-        '''Stop the current action'''
-        self._stopped = True
-
-        # Stop all servos
-        for pair in range(len(self.legPairs)):
-            self.legPairs[pair].left.stop()
-            self.legPairs[pair].right.stop()
-
-        # Stop all threads
-        self._stopThreads()
 
 
 
@@ -1310,11 +1082,70 @@ if __name__ == "__main__":
     # Load settings from json file
     animal.loadSettings()
 
-    print("wakeSlowly(2)")
-    #animal.wakeSlowly(5) 
+    print("wakeSlowly")
+    animal.wakeSlowly(2) 
     #sleep(2)
 
-    #animal.forward()
+    t = 10
+
+    animal.runAction(animal._backRight)
+    sleep(t)
+
+    #animal.runAction(animal._backLeft)
+    #sleep(t)
+
+
+    """
+    animal.runAction(animal._forward)
+    sleep(t)
+
+    animal.runAction(animal._backward)
+    sleep(t)
+
+    animal.runAction(animal._right)
+    sleep(t)
+
+    animal.runAction(animal._left)
+    sleep(t)
+
+    animal.runAction(animal._point)
+    sleep(t)
+
+    animal.runAction(animal._eat)
+    sleep(t)
+
+    animal.runAction(animal._unwind)
+    sleep(t)
+
+    animal.runAction(animal._alert)
+    sleep(t)
+
+    animal.runAction(animal._sit)
+    sleep(t)
+
+    animal.runAction(animal._kneesup)
+    sleep(t)
+
+    animal.runAction(animal._kneesdown)
+    sleep(t) 
+
+    animal.runAction(animal._hipsbackward)
+    sleep(t) 
+
+    animal.runAction(animal._hipsforward)
+    sleep(t)   
+    """
+
+    """
+    animal.runAction(animal._detectMovement)
+    sleep(10)   
+
+    animal.runAction(animal._trackMovement)
+    sleep(30)   
+    """
+
+    animal.stopCurrentAction()
+  
 
     # Run through all possible actions
     """
@@ -1327,8 +1158,8 @@ if __name__ == "__main__":
     
     # Run the animal in random mode
 
-    print("Running animal")
-    animal.start()
-    while True:
-        sleep(0.2)
+    #print("Running animal")
+    #animal.start()
+    #while True:
+    #    sleep(0.2)
     

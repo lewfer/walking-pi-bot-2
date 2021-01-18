@@ -25,7 +25,6 @@ from time import sleep
 def ease(t):
     return easeInOutQuad(t)
 
-
 # Class
 # -------------------------------------------------------------------------------------------------
 class Joint():

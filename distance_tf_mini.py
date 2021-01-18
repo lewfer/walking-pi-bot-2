@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*
 import pigpio
 import time
+from statistics import median
 
 class DistanceSensor:
 
@@ -22,15 +23,31 @@ class DistanceSensor:
         pi.bb_serial_read_close(self.RX)
         pi.stop()
 
+    def readMedianCm(self, n):
+        dists = []
+        for i in range(n):
+            dist = self.readCm()
+            dists.append(dist)
+        dist = median(dists)
+        return dist
+
     def readCm(self):
         distance = -1
+        tries = 0
         
         while distance==-1:
+            tries += 1
             time.sleep(0.05)	#change the value if needed
             (count, recv) = self.pi.bb_serial_read(self.RX)
 
+            if tries>10:
+                print("Trouble getting distances")
+
             if count < 8:
                 continue
+
+            if tries>10:
+                print("+",end="")
 
             # Search for the header bytes
             orig_count = count

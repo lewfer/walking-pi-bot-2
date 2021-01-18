@@ -12,7 +12,6 @@ from thermal_amg88xx import ThermalSensor
 from helpers import remap
 from threading import Thread
 from time import sleep
-from statistics import median
 
 class Head:
 
@@ -121,7 +120,13 @@ class Head:
 
         matrix = self.thermalSensor.readMatrix()
         #min,max,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
-        movement,_,colmovements,hotspot = self.thermalSensor.movement()
+        movement = self.thermalSensor.movement()
+
+        # If sensor not ready return
+        if movement is None:
+            return False
+
+        movement,_,colmovements,hotspot = movement
 
         # Get the column which has most movement
         hotcol = hotspot[1]
@@ -129,9 +134,11 @@ class Head:
         if (colmovements[hotcol]>10): #!!
         #if movement>80: #!!param
             #print("movement {}".format(movement))
+            print("Movement")
             self.thermalSensor.printCols(colmovements, indent="\t")
             return True
         else:
+            print("No movement")
             #print("no movement {}".format(movement))
             self.thermalSensor.printCols(colmovements, indent="\t")
             return False
@@ -143,57 +150,112 @@ class Head:
         self.joint.moveTo(newAngle, t)
 
     def scan(self):
-        """Scan left to right, reading distances (21 positions).  Returns the distances as a list, and the index of the min and max distance."""
+        """Scan left to right, reading distances.  """
         distances = []
         self.move(-100, t=2)
         dist = self.distanceSensor.readCm() # throw away first reading as it seems to be dodgy
 
-        # Scan left to right
-        for pos in range(-100,101,10):
-            self.move(pos, t=0)
-            if pos%10==0:
-                #dist1 = self.distanceSensor.readCm()
-                #dist2 = self.distanceSensor.readCm()
-                #dist3 = self.distanceSensor.readCm()
-                #dist = median([dist1,dist2,dist3])
-                dist = self.distanceSensor.readCm()
-                #print([dist1,dist2,dist3],dist)
+        # Scan left to right, reading distances
+        minPos = -100
+        minDist = 9999
+        maxPos = -100
+        maxDist = -9999        
+        minLeftDist = 9999
+        minRightDist = 9999    
+        maxLeftDist = -9999
+        maxRightDist = -9999
+        for pos in range(-100,101):
+            if pos%20==0:
+                self.move(pos, t=0.5)
+                dist = self.distanceSensor.readMedianCm(3)
                 distances.append(dist)
+
+                if dist<minDist:
+                    minPos = pos
+                    minDist = dist
+                if dist>maxDist:
+                    maxPos = pos
+                    maxDist = dist
+                if pos<=0 and dist<minLeftDist:
+                    minLeftDist = dist
+                if pos>0 and dist<minRightDist:
+                    minRightDist = dist       
+                if pos<=0 and dist>maxLeftDist:
+                    maxLeftDist = dist
+                if pos>0 and dist>maxRightDist:
+                    maxRightDist = dist    
+
+        print(distances)
 
         # Move back to centre
         self.move(0, t=2)
 
         # Check for thermal movement
-        self.thermalSensor.readMatrix()
-        sleep(1) #!! 
-        movement = self.detectMovement()
+        self.thermalSensor.readMatrix()  # read
+        sleep(1)                         #!!  wait
+        movement = self.detectMovement() # read again and look for deltas
 
-        return distances, distances.index(min(distances)), distances.index(max(distances)), movement
+        return minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement
+
+
+        #return distances, distances.index(min(distances)), distances.index(max(distances)), movement
 
     def scanLeft(self):
         """Scan left side, reading distances (10 positions).  Returns the distances as a list, and the index of the min and max distance."""
         distances = []
         self.move(0, t=2)
         dist = self.distanceSensor.readCm() # throw away first reading as it seems to be dodgy
+
+        minPos = -100
+        minDist = 9999
+        maxPos = -100
+        maxDist = -9999       
+
         for pos in range(0,-101,-10):
-            self.move(pos, t=0)
             if pos%10==0:
-                dist = self.distanceSensor.readCm()
+                self.move(pos, t=0.5)
+                dist = self.distanceSensor.readMedianCm(3)
                 distances.append(dist)
-        distances.reverse() # so distances are left to right
-        return distances, distances.index(min(distances)), distances.index(max(distances))
+
+                if dist<minDist:
+                    minPos = pos
+                    minDist = dist
+                if dist>maxDist:
+                    maxPos = pos
+                    maxDist = dist
+
+        return minPos, minDist, maxPos, maxDist
+
+        #distances.reverse() # so distances are left to right
+        #return distances, distances.index(min(distances)), distances.index(max(distances))
 
     def scanRight(self):
         """Scan right side, reading distances (10 positions).  Returns the distances as a list, and the index of the min and max distance."""
         distances = []
         self.move(0, t=2)
         dist = self.distanceSensor.readCm() # throw away first reading as it seems to be dodgy
+
+        minPos = -100
+        minDist = 9999
+        maxPos = -100
+        maxDist = -9999   
+
         for pos in range(0,101,10):
-            self.move(pos, t=0)
             if pos%10==0:
-                dist = self.distanceSensor.readCm()
+                self.move(pos, t=0.5)
+                dist = self.distanceSensor.readMedianCm(3)
                 distances.append(dist)
-        return distances, distances.index(min(distances)), distances.index(max(distances))
+
+                if dist<minDist:
+                    minPos = pos
+                    minDist = dist
+                if dist>maxDist:
+                    maxPos = pos
+                    maxDist = dist      
+
+        return minPos, minDist, maxPos, maxDist
+
+        #return distances, distances.index(min(distances)), distances.index(max(distances))
 
 
     # Sensor management
@@ -238,7 +300,7 @@ class Head:
         self._runningDistanceSensor = True
         while self._runningDistanceSensor:
             if not self._pauseDistanceSensor:
-                dist = self.distanceSensor.readCm()
+                dist = self.distanceSensor.readMedianCm(3)
                 self.lastDistance = dist
                 #print("Dist",dist)
                 if dist < self.shortDistance and dist > 1: # sometimes readings of 1 come in error # 
@@ -292,14 +354,18 @@ if __name__ == "__main__":
 
     #head.trackHotspot()
 
+    """
     while True:
         col = head.trackMovement()
         #print(col)
         sleep(0.2)
+    """
 
     # Scan left to right and read 21 distances
-    #dists = head.scan()
-    #print(dists)
+    #distances, mindist, maxdist, movement = head.scan()
+    minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement = head.scan()
+    #print("distances={} mindist={}(idx={}) maxdist={}(idx={}) movement={}".format(distances, distances[mindist], mindist, distances[maxdist], maxdist, movement))
+    print("minPos={} minDist={} maxPos={} maxDist={} minLeftDist={} minRightDist={} maxLeftDist={} maxRightDist={} movement={}".format(minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement))
 
     #head.move(-100, t=2)
     #sleep(1)
