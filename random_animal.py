@@ -76,6 +76,8 @@ class RandomAnimal(Animal):
             'R':'do_right()',
             'l':'do_backLeft()',
             'r':'do_backRight()',
+            '\\':'do_leftNoCheck()',
+            '/':'do_rightoCheck()',            
             'W':'do_wait()',
             'U':'do_unwind()',
             'P':'do_point()',
@@ -105,7 +107,7 @@ class RandomAnimal(Animal):
 
         # Weights for random movement action choices
         #                                 ['.','S','B','L','R','U','P','E','A','+','-']
-        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  2,  1,  1,  20,  1]
+        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  0,  1,  1,  20,  1]
 
         # Min/max time for action to run
         self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[10,20],'+':[20,30],'-':[2,10]}
@@ -173,15 +175,20 @@ class RandomAnimal(Animal):
             obstacleLeft = minLeftDist < self.settings['SHORTDISTANCE']     # something on left
             #obstacleRight = min(distances[11:]) < self.settings['SHORTDISTANCE']    # something on right
             obstacleRight = minRightDist < self.settings['SHORTDISTANCE']    # something on right
-            shortestLeft = minPos <= 0                                             # shortest distance is on left
+            shortestLeft = minPos < 0                                              # shortest distance is on left
             shortestRight = minPos > 0                                             # shortest distance is on right
+            longestLeft = maxPos < 0                                               # longest distance is on left
+            longestRight = maxPos > 0                                              # longest distance is on right
             if obstacleLeft and obstacleRight:
                 # Something on left and right, so back out
-                if shortestLeft:
-                    self.log.info("\tObstacle on LEFT and right, so back out left")
+                if longestRight: #shortestLeft:
+                    self.log.info("\tObstacle on left and right, more space right, so back out left")
                     self.do_backLeft()
+                elif longestLeft:
+                    self.log.info("\tObstacle on left and right, more space left, so back out right")
+                    self.do_backRight()
                 else:
-                    self.log.info("\tObstacle on left and RIGHT, so back out right")
+                    self.log.info("\tObstacle on left and right, more space straight, so default to back out right")
                     self.do_backRight()
             elif shortestLeft:  
                 self.log.info("\tObstacle on left, so veer right")
@@ -189,6 +196,10 @@ class RandomAnimal(Animal):
             elif shortestRight:  
                 self.log.info("\tObstacle in right, so veer left")
                 self.do_leftNoCheck()
+            else:
+                self.log.info("\tObstacle straight ahead, so back out")
+                self.do_backward()
+
 
             # Whatever we decided to do, return to going forward eventually
             self._setTimer(30, 'F')                   # back to default when finished !!
@@ -337,6 +348,22 @@ class RandomAnimal(Animal):
         else:
             print("Still stuck", dist)
 
+    def do_checkEscapeLeftAntenna(self):
+        if self.leftAntenna.is_pressed:
+            print("Still stuck")
+        else:
+            # We have escaped
+            self._setTimer(0, self._timerAction) # Start immediately
+            print("Escaped")
+
+    def do_checkEscapeRightAntenna(self):
+        if self.rightAntenna.is_pressed:
+            print("Still stuck")
+        else:
+            # We have escaped
+            self._setTimer(0, self._timerAction) # Start immediately
+            print("Escaped")
+
     # Action management
     # ---------------------------------------------------------------------------------------------
 
@@ -401,6 +428,14 @@ class RandomAnimal(Animal):
                 # We are currently trying to escape, so check if we can
                 self.do_checkEscape()
 
+            elif self._interruptId=="escape-left-antenna":
+                # We are currently trying to escape, so check if we can
+                self.do_checkEscapeLeftAntenna()
+
+            elif self._interruptId=="escape-right-antenna":
+                # We are currently trying to escape, so check if we can
+                self.do_checkEscapeRightAntenna()
+
             elif self._interruptId is not None:
                 # There was an interrupt that needs to be handled
                 self._handleInterrupt()
@@ -451,9 +486,14 @@ class RandomAnimal(Animal):
         """Print out the status for debugging"""
 
         if self._interruptId != "human-detect": # and self._currentAction!="M":
-            self.log.info("\t{} age={} alertness={} energy={} timernext={}_in_{}s threadcount={} interrupt={} dist={} temp={},{} human={}".format(
+            if self._timerDelay == 0:
+                timerMsg = "{}_when_done".format(self._timerAction)
+            else:
+                timerMsg = "{}_in_{}s (of {}s)".format(self._timerAction, self._timerDelay-(self.age-self._timerAgeStart), self._timerDelay)
+            self.log.info("\t{} age={} alertness={} energy={} timernext={} threadcount={} interrupt={} dist={} temp={},{} human={}".format(
                 self._currentAction, self.age, self.alertness, self.energy, 
-                self._timerAction, self._timerDelay, activeCount(), self._interruptId, 
+                timerMsg,
+                activeCount(), self._interruptId, 
                 self.head.lastDistance, self.head.lastMinTemperature,self.head.lastMaxTemperature,
                 self.lastHumanDetectAge))
 
@@ -512,11 +552,13 @@ class RandomAnimal(Animal):
 
             elif self._interruptId=="left-antenna":
                 self.do_rightNoCheck()
-                self._setTimer(self._randint(self.settings['RANDOMTIME']['R']), 'F')    
+                self._interruptId = "escape-left-antenna"
+                self._setTimer(30, 'F')
 
             elif self._interruptId=="right-antenna":
                 self.do_leftNoCheck()
-                self._setTimer(self._randint(self.settings['RANDOMTIME']['L']), 'F')    
+                self._interruptId = "escape-right-antenna"
+                self._setTimer(30, 'F')
 
             elif self._interruptId=="human-detect":
                 # 

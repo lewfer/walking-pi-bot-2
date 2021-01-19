@@ -295,7 +295,7 @@ class Animal():
 
 
     def _run(self):
-        self._forward(speed=4)
+        self._forward(speed=10)
 
     def _crawl(self):
         self._forward(speed=0.5)        
@@ -986,7 +986,7 @@ class Animal():
         self._stopped = False
 
         # Put in alert state
-        self._alert()
+        self._point()
 
         #self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
 
