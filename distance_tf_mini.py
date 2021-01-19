@@ -31,55 +31,76 @@ class DistanceSensor:
         dist = median(dists)
         return dist
 
+    def p(self, buffer):
+        for b in buffer:
+            print(hex(b)[2:]+".",end="")       
+        print("") 
+
     def readCm(self):
         distance = -1
         tries = 0
         
+            
+        #print("ReadCm")
         while distance==-1:
             tries += 1
-            time.sleep(0.05)	#change the value if needed
-            (count, recv) = self.pi.bb_serial_read(self.RX)
+            #time.sleep(0.05)	#change the value if needed
+
+
+            buffer = bytearray()
+            count = 0
+            while count<9:
+                (count, recv) = self.pi.bb_serial_read(self.RX)
+                if count>0:
+                    #print("buffer",type(buffer), count)
+                    #print("+",end="")
+                    buffer += recv
+                time.sleep(0.02)
+            #self.p(buffer[:10])
+            count = len(buffer)
+
 
             if tries>10:
-                print("Trouble getting distances")
-
-            if count < 8:
-                continue
-
-            if tries>10:
-                print("+", count,end="")
+                print("Trouble getting distances", tries)
+                time.sleep(0.2)
 
             # Search for the header bytes
             orig_count = count
-            while not (recv[0] == 0x59 and recv[1] == 0x59) and count>8: 
-                recv = recv[1:]
+            while not (buffer[0] == 0x59 and buffer[1] == 0x59) and count>8: 
+                buffer = buffer[1:]
                 count -= 1
 
-            if count<8:
-                print(recv)
+            #print("Ready:",end="")
+            #self.p(buffer)
+            #print("")
 
             #print("\tcount",orig_count,count, recv[0], recv[1], recv)
 
             if count > 8:
                 #print("b")
                 #for i in range(0, count-9):
-                if recv[0] == 0x59 and recv[1] == 0x59: 
+                if buffer[0] == 0x59 and buffer[1] == 0x59: 
                     #print("c")
 
                     # From manual: checksum is the lower 8 bits of the cumulative sum of the numbers in the first 8 bytes
                     checksum = 0
                     for j in range(0, 8):
-                        checksum = checksum + recv[j]
+                        checksum = checksum + buffer[j]
                     checksum = checksum % 256 
 
-                    if checksum == recv[8]:
+                    if checksum == buffer[8]:
                         #print("d")
-                        distance = recv[2] + recv[3] * 256
-                        strength = recv[4] + recv[5] * 256
+                        distance = buffer[2] + buffer[3] * 256
+                        strength = buffer[4] + buffer[5] * 256
                         #print("\t",distance,strength)
 
+                        #if distance>500:
+                        #    print("\t",distance,strength)
+
                         # I noticed that high strength measurements were unreliable
-                        if strength>32767 or strength<100:
+                        #if strength>32767 or strength<100:
+                        if strength>40000 or strength<20:
+                            print("strength failed", strength, distance)
                             distance = -1
 
                         #if True: #distance <= 1200 and strength < 2000:
@@ -91,12 +112,24 @@ class DistanceSensor:
                     else:
                         #print("Checksum failed")
                         pass
+                #buffer = bytearray()
+            else:
+                #print("lost bytes", end="")
+                #self.p(buffer[:10])
+                # keep buffer
+                pass
 
+            if tries>20:
+                return self.maxDistance
 
         return max(min(distance,self.maxDistance),self.minDistance)
 
 if __name__ == '__main__':
     dist = DistanceSensor(14)
+    i = 0
     while True:
-        print("dist",dist.readCm())
+        print(" dist",dist.readCm(), end="")
+        if i%10==0:
+            print("")
         #time.sleep(0.1)
+        i += 1

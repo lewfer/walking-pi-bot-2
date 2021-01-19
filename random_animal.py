@@ -148,22 +148,26 @@ class RandomAnimal(Animal):
         
         # do_default is a bit like an interrupt
         self.head.pauseSensors()   # pause sensors while we scan
-        self._pauseInterrupts()
+        #self._pauseInterrupts()
 
         # Do a scan (move head from side-to-side) looking for short distances
         self.log.info("\tScanning")
         #distances, minpos, maxpos, movement = self.head.scan()
         minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement = self.head.scan()
-        print("\tScan minpos={} maxpos={}".format(minPos, maxPos))
+        print("\tScan minpos={} maxpos={} movement={}".format(minPos, maxPos, movement))
 
         # Check what we saw
         if movement:
-            # We saw something move
+            # We saw something move, so track it for a while
             self.log.info("\tSaw a movement")
-            self._handleAction(self._trackMovement, "T")
+            self.do_trackMovement()
             self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
             
         elif minDist < self.settings['SHORTDISTANCE'] : 
+            # We are now in escape mode
+            self._interruptId = "escape"
+            self._interruptValue = 0
+
             # We are too close to something.  Check if something is left or right.  10 readings on the right side, 11 readings on the left side
             #obstacleLeft = min(distances[:11]) < self.settings['SHORTDISTANCE']     # something on left
             obstacleLeft = minLeftDist < self.settings['SHORTDISTANCE']     # something on left
@@ -175,35 +179,38 @@ class RandomAnimal(Animal):
                 # Something on left and right, so back out
                 if shortestLeft:
                     self.log.info("\tObstacle on LEFT and right, so back out left")
-                    self._handleAction(self._backLeft, "l")
+                    self.do_backLeft()
                 else:
                     self.log.info("\tObstacle on left and RIGHT, so back out right")
-                    self._handleAction(self._backRight, "r")
+                    self.do_backRight()
             elif shortestLeft:  
                 self.log.info("\tObstacle on left, so veer right")
-                self._handleAction(self._right, "R")
+                self.do_rightNoCheck()
             elif shortestRight:  
                 self.log.info("\tObstacle in right, so veer left")
-                self._handleAction(self._left, "L")
-            self._setTimer(self._randint([4,15]), 'F')                   # back to default when finished !!
+                self.do_leftNoCheck()
+
+            # Whatever we decided to do, return to going forward eventually
+            self._setTimer(30, 'F')                   # back to default when finished !!
         else:
             # We are not too close to anything
             self.log.info("\tNo issues seen, so move F")
-            self._handleAction(self._forward, "F")
+            self.do_forward()
 
         #self.head.unPauseSensors()   # turn sensors back on 
         #self._unPauseInterrupts()
 
     def endInterrupt(self):
         """Reset back to default behaviour following an interrupt"""
+        #!!redundant?
         self._clearInterrupt()
         self.do_default()
 
     def do_forward(self):
         self.head.move(0, t=1)
-        self._handleAction(self._forward, "F")
         self.head.unPauseSensors()   # turn sensors back on for moving forwards
         self._clearInterrupt()
+        self._handleAction(self._forward, "F")
 
     def do_backward(self):
         self.head.move(0, t=1)
@@ -321,6 +328,14 @@ class RandomAnimal(Animal):
     def do_crawl(self):
         self._handleAction(self._crawl, "-")
 
+    def do_checkEscape(self):
+        dist = self.head.distanceSensor.readMedianCm(3)
+        if dist > self.settings['SHORTDISTANCE'] * 2:
+            # We have escaped
+            self._setTimer(0, self._timerAction) # Start immediately
+            print("Escaped", dist)
+        else:
+            print("Still stuck", dist)
 
     # Action management
     # ---------------------------------------------------------------------------------------------
@@ -382,7 +397,11 @@ class RandomAnimal(Animal):
                     self._executeTimer()
                     continue
 
-            if self._interruptId is not None:
+            if self._interruptId=="escape":
+                # We are currently trying to escape, so check if we can
+                self.do_checkEscape()
+
+            elif self._interruptId is not None:
                 # There was an interrupt that needs to be handled
                 self._handleInterrupt()
 
@@ -476,6 +495,8 @@ class RandomAnimal(Animal):
 
 
     def _handleInterrupt(self):
+
+
         # Handle the interrupt
         if not self._interruptBeingHandled:
             self.log.info("Handle Interrupt {}".format(self._interruptId))
@@ -503,10 +524,11 @@ class RandomAnimal(Animal):
                 self.do_trackMovement()
                 self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
 
-
             elif self._interruptId=="long-distance":
                 self._clearInterrupt()
                 self.head.unPauseSensors()  
+
+
             """
                 self.do_run()
                 #minmax = self.settings['RANDOMTIME']['R']

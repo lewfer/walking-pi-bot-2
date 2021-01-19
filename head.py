@@ -134,11 +134,11 @@ class Head:
         if (colmovements[hotcol]>10): #!!
         #if movement>80: #!!param
             #print("movement {}".format(movement))
-            print("Movement")
+            print("\tMovement:")
             self.thermalSensor.printCols(colmovements, indent="\t")
             return True
         else:
-            print("No movement")
+            print("\tNo movement:")
             #print("no movement {}".format(movement))
             self.thermalSensor.printCols(colmovements, indent="\t")
             return False
@@ -185,7 +185,7 @@ class Head:
                 if pos>0 and dist>maxRightDist:
                     maxRightDist = dist    
 
-        print(distances)
+        print("\t", distances)
 
         # Move back to centre
         self.move(0, t=2)
