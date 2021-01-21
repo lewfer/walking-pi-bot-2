@@ -17,14 +17,13 @@ You can also start its random movement mode by calling animal.start()
 # Imports
 # -------------------------------------------------------------------------------------------------
 from threadhelper import *
+from helpers import *
 from joint import *
 from leg import *
 from time import sleep
 import curses
 import random
 import json
-import logging
-import sys
 from head import Head
 from gpiozero import Button
 
@@ -39,42 +38,39 @@ class Animal():
     '''Animal has a number of pairs of legs'''
 
     def __init__(self):
+        # Set up logger to log to screen
+        self.log = createLogger()    
+      
         # Construction
-        self.numLegs = 0                                                # number of legs - start with none
-        self.legPairs = []                                              # start with no legs
-        self.head = Head(self.interrupt)
+        self.numLegs = 0                        # number of legs - start with none
+        self.legPairs = []                      # start with no legs (they will be added later)
+        self.head = Head(self.interrupt, self.log)
         self.leftAntenna = Button(6)
         self.rightAntenna = Button(12)
 
-        # Robot health
+        # Robot health (not used at the moment)
         # Can use these to determine behaviour, e.g. slowing down as energy drops
         self.alertness = 120
         self.energy = 1000
         self.age = 0
 
         # Helper objects, to idenntify legs and threads
-        self._legs = {}                                                  # dictionary to quickly find legs
-        self._threads = {}                                               # dictionary to quickly find threads
+        self._legs = {}                         # dictionary to quickly find legs
+        self._threads = {}                      # dictionary to quickly find threads
 
-
+        # Actions will run on a thread
         self._actionThread = None               # thread on which current action is running
         self._threadCount = 0                   # so we can track threads
 
         self._stopped = False                   # flag to indicate if we want the animal to stop what it is doing (i.e. stop current thread)
 
-        # Antennae handlers
+        # Antennae handlers - called when antenna triggered
         self.leftAntenna.when_pressed = self._leftAntennaPressed
         self.rightAntenna.when_pressed = self._rightAntennaPressed
 
-        # Set up logger to log to screen
-        self.log = logging.getLogger('logger')
-        self.log.setLevel(logging.INFO)
-        h = logging.StreamHandler(sys.stdout)
-        h.setFormatter(logging.Formatter('%(message)s'))  
-        self.log.addHandler(h)     
-
         # Caller can register a callback to receive messages (for display purposes)
         self.messageCallback = None
+
         self.log.info("Created Animal")
 
 
@@ -82,7 +78,8 @@ class Animal():
     # ---------------------------------------------------------------------------------------------
 
     def addPairOfLegs(self, left, right):
-        '''Add legs from front to back'''
+        '''Add legs two at a time from front to back'''
+
         index = len(self.legPairs)
         self.legPairs.append(LegPair(left, right))
 
@@ -96,19 +93,27 @@ class Animal():
 
         self.numLegs += 2
 
+    # Interrupt
+    # ---------------------------------------------------------------------------------------------
+
     def interrupt(self, id, value):
+        """Virtual function can be overridden"""
         pass
 
     # Settings 
     # ---------------------------------------------------------------------------------------------
 
     def setDefaultSettings(self):
+        """Set default settings for the robot.  These will apply if no settings file found."""
+
+        # Range of servo angle movements for each joint
         self.settings = {"leg_ranges": []}
         # knee order: down, mid, up
         # hip order: back, mid, forward
         for i in range(len(self.legPairs)):
             self.settings["leg_ranges"].append({"left": {"hip": [130,90,70],"knee": [50,90,130]},"right": {"hip": [50,90,110],"knee": [130,90,50]}})
 
+        # Speed of leg movements
         self.settings['REACHTIME'] = 1
         self.settings['PUSHTIME'] = 1
         self.settings['PUSHDELAY'] = 0
@@ -116,27 +121,35 @@ class Animal():
         # Random wait time between certain movements, in tenths of a second
         self.settings['RANDOMWAIT'] = 2    
 
+        # Number of time steps taken per angular degree.  Adjust for smoother/quicker movement.  Small value means smoother, but possibly slower
         self.settings['STEPSPERDEGREE'] = 1
 
     def loadSettings(self):
         '''Load the settings file, which contains the calibrated settings for each joint'''
+
+        # Default to the defaults if no settings file
         self.setDefaultSettings()
+
+        # Load settings over the defaults
         try:
             # Try to load the settings file
             with open(SETTINGSFILENAME) as f:
                 self.log.info("Settings {} found".format(SETTINGSFILENAME))
-                self.settings.update(json.load(f))
-                self.storeSettings() # in case we added new defaults
+                self.settings.update(json.load(f))  # update defaults with settings loaded from file
+                self.storeSettings()                # in case we added new defaults
         except FileNotFoundError:
             # If no settings file use defaults 
             self.log.info("Settings file {} not found.  Using defaults".format(SETTINGSFILENAME))
             self.storeSettings()
-            #self.factoryReset()
+
         self.log.info(self.settings)
 
+        # Apply the settings to the robot
         self.applySettings()
         
     def applySettings(self):
+        '''Apply settings to the servos etc'''
+
         # Now set the default angles for each joint.  We need to mirror the angles left and right legs 
         for pair in range(len(self.legPairs)):
 
@@ -164,27 +177,24 @@ class Animal():
             self.head.humanDetectMin = self.settings['HUMANDETECTMIN'] 
             self.head.humanDetectMax = self.settings['HUMANDETECTMAX'] 
 
-            #print(self.legPairs[pair].left.hip)
-            #print(self.legPairs[pair].left.knee)
-            #print(self.legPairs[pair].right.hip)
-            #print(self.legPairs[pair].right.knee)
-
         self._setStepsPerDegree(self.settings['STEPSPERDEGREE'])
 
     def storeSettings(self):
-        '''Store the default settings to the settings file'''
+        '''Store the current settings to the settings file'''
+
         # Save the settings dictionary to file
         with open(SETTINGSFILENAME, 'w') as f:
             json.dump(self.settings, f)
 
     def storeAndReapplySettings(self):
-        '''Store the default settings to the settings file'''
-        self.storeSettings()
+        '''Store the current settings to the settings file and apply them'''
 
-        # Reload so settings are applied
+        self.storeSettings()
         self.loadSettings()
 
     def factoryReset(self):
+        '''Return to all default settings, store in the settings file and apply to the robot'''
+
         self.setDefaultSettings()
         self.storeAndReapplySettings()
 
@@ -197,15 +207,22 @@ class Animal():
             self.legPairs[pair].left.hip.stepsPerDegree = spd
             self.legPairs[pair].left.knee.stepsPerDegree = spd
             self.legPairs[pair].right.hip.stepsPerDegree = spd
-            self.legPairs[pair].right.knee.stepsPerDegree = spd        
+            self.legPairs[pair].right.knee.stepsPerDegree = spd     
+
 
     # Sensors
     # ---------------------------------------------------------------------------------------------
 
     def _leftAntennaPressed(self):
+        '''Handler called when left antenna triggered'''
+
+        # Raise an interrupt and allow caller to deal with it
         self.interrupt("left-antenna", 0)
 
     def _rightAntennaPressed(self):
+        '''Handler called when right antenna triggered'''
+
+        # Raise an interrupt and allow caller to deal with it
         self.interrupt("right-antenna", 0)
 
 
@@ -217,36 +234,36 @@ class Animal():
         # Get the thread associated with the leg
         thread = self._threads[legId]
 
-        # Wait for existing thread to finish
+        # Wait for existing thread to finish so we don't try to make servo move to multiple angles at the same time!
         if thread is not None:
             self.log.debug("\tWait for thread {} before create new {} for {}".format(thread.name, legId, func))
             thread.join()
         else:
             self.log.debug("\tNo existing thread for {}".format(legId))
 
-        # Start the new thread
+        # Start the new thread to run the function
         funcEval = eval('self._legs[legId].'+func)
         threadName = legId + ":" + func + ":" + str(self._threadCount)
         self._threadCount += 1
         thread = Thread(target=funcEval, name=threadName, kwargs=params)
         thread.start()
-        #oldname = thread.name
-        #thread.name = legId + ":" + func
         self.log.debug("\tStarted new thread{}".format(thread.name))
 
-        # Store the thread against the leg
+        # Store the thread against the leg id so we can find it again later
         self._threads[legId] = thread
 
     def _joinThreads(self, legIds):
         """Wait for all threads to finish for the specified legs"""
+
         for legId in legIds:
             thread = self._threads[legId]
             if thread is not None:
                 thread.join()
 
     def _stopThreads(self):
+        '''Stop all threads for all legs'''
+
         self.log.debug("Stopping threads:", self._threads)
-        # Stop all threads for all legs
         for i, k in enumerate(self._threads):
             thread = self._threads[k]
             if thread is not None:
@@ -258,7 +275,6 @@ class Animal():
 
     def _stopMovements(self):
         '''Stop the servos and threads'''
-        #self._stopped = True
 
         # Stop all servos
         for pair in range(len(self.legPairs)):
@@ -268,21 +284,25 @@ class Animal():
         # Stop all threads
         self._stopThreads()
 
-    def stopCurrentAction(self):
-        #self._stopMovements()
-        self._stopped = True
-        if self._actionThread: self._actionThread.join()
 
+    # Run and Stop Actions
+    # ---------------------------------------------------------------------------------------------
 
     def runAction(self, func):  
-        """Stop any current action and start a new one"""
+        '''Stop any current action and start a new one if func is provided'''
+
         self.log.info("runAction {}".format(func.__name__))
-        #self._stopMovements()
         self.stopCurrentAction()
-        #if self._actionThread: self._actionThread.join()
         if func is not None:
             self._actionThread = Thread(target=func)
             self._actionThread.start()   
+
+
+    def stopCurrentAction(self):
+        '''Stop any current action and wait for its thread to finish'''
+        #self._stopMovements()
+        self._stopped = True
+        if self._actionThread: self._actionThread.join()
 
 
 
@@ -291,13 +311,17 @@ class Animal():
 
     def _waitRandom(self):
         '''Wait for a random time (in tenths of a second)'''
+
         sleep(random.randint(0,self.settings['RANDOMWAIT'])/10.0) 
 
-
     def _run(self):
+        '''Move forward at speed'''
+
         self._forward(speed=10)
 
     def _crawl(self):
+        '''Move forward slowly'''
+
         self._forward(speed=0.5)        
 
     def _forward(self, speed=1):
@@ -829,6 +853,10 @@ class Animal():
         # Wait for all threads to stop
         self._joinThreads(threads)
 
+    def _scare(self, t=1):
+        '''Scare'''
+        self._hipsbackward(t)
+        self._kneesup(t)   
 
     def _unwind(self, t=1):
         '''Put the animal into a relaxing state (crouched down)'''
@@ -986,7 +1014,7 @@ class Animal():
         self._stopped = False
 
         # Put in alert state
-        self._point()
+        self._scare()
 
         #self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
 
@@ -996,7 +1024,7 @@ class Animal():
             # Track the movement that was detected
             if self.head.trackMovement():
                 noMovementCount = 0 # reset
-                #self.log.info("Still tracking")
+                self.log.info("Still tracking")
             else:
                 noMovementCount += 1
                 if noMovementCount > 30: #!!
@@ -1063,10 +1091,6 @@ class Animal():
         runThreadsTogether(threads) 
     """
 
-
-
-
-
 if __name__ == "__main__":
     print("Testing Animal")    
 
@@ -1084,18 +1108,11 @@ if __name__ == "__main__":
 
     print("wakeSlowly")
     animal.wakeSlowly(2) 
-    #sleep(2)
 
     t = 10
 
-    animal.runAction(animal._backRight)
-    sleep(t)
+    # Run through all the actions
 
-    #animal.runAction(animal._backLeft)
-    #sleep(t)
-
-
-    """
     animal.runAction(animal._forward)
     sleep(t)
 
@@ -1134,32 +1151,18 @@ if __name__ == "__main__":
 
     animal.runAction(animal._hipsforward)
     sleep(t)   
-    """
 
-    """
+    animal.runAction(animal._backRight)
+    sleep(t)
+
+    animal.runAction(animal._backLeft)
+    sleep(t)
+
     animal.runAction(animal._detectMovement)
     sleep(10)   
 
     animal.runAction(animal._trackMovement)
     sleep(30)   
-    """
 
     animal.stopCurrentAction()
   
-
-    # Run through all possible actions
-    """
-    for func in animal.actionFunction.values():
-        print(func)
-        eval("animal."+func)
-        sleep(5)
-    """
-
-    
-    # Run the animal in random mode
-
-    #print("Running animal")
-    #animal.start()
-    #while True:
-    #    sleep(0.2)
-    

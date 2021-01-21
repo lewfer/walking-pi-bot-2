@@ -1,43 +1,20 @@
 """
-animal.py
+random_animal.py
 
-Implementation of Animal class.
-An Animal is a robot with a number of pairs of legs.
+Implementation of RandomAnimal class.
 
-Each leg will have one and only one thread running movements at a time.  
-This prevents multiple threads trying to move a single servo at the same time, which causes erratic movements. 
+A RandomAnimal is an animal that does random actions.
 
-Animal settings are stored in a json file.
+Actions run for a while until another action is triggered.
+Another action can be triggered by a timer (e.g run forwards in 5 seconds time)
+or by an interrupt (e.g. obstacle detected).
 
-You can run specific behaviours, e.g. animal.forward().
-
-You can also start its random movement mode by calling animal.start()
 """
 
 # Imports
 # -------------------------------------------------------------------------------------------------
-from animal import Animal
+from animal import *
 
-from leg import Leg
-from joint import Joint
-
-from threadhelper import *
-
-import random
-
-from time import sleep
-"""
-from threadhelper import *
-from joint import *
-import curses
-import json
-import logging
-import sys
-from head import Head
-from gpiozero import Button
-"""
-
-    
 
 # Class
 # -------------------------------------------------------------------------------------------------
@@ -61,11 +38,10 @@ class RandomAnimal(Animal):
         self._interruptBeingHandled = None      # if we are currently executing the interrupt handling action
 
         # Random action generator
-        self._randomThread = None        # thread on which random action generator runs
-        self._runningRandom = False      # flag to indicate that random thread is running
+        self._randomThread = None               # thread on which random action generator runs
+        self._runningRandom = False             # flag to indicate that random thread is running
 
         self._threadCount = 0                   # so we can track threads
-
 
         # List of one-letter action codes and the associated actions
         self.actionFunction = {
@@ -90,18 +66,16 @@ class RandomAnimal(Animal):
             'A':'do_alert()',
             '+':'do_run()',
             '-':'do_crawl()',
-            'I':'endInterrupt()',
             'M':'do_detectMovement()',
             'T':'do_trackMovement()'
             }
-
-
 
 
     # Settings 
     # ---------------------------------------------------------------------------------------------
 
     def setDefaultSettings(self):
+        '''Override Animal method to set additional settings for RandomAnimal'''
 
         Animal.setDefaultSettings(self)   
 
@@ -132,9 +106,7 @@ class RandomAnimal(Animal):
         self.settings['HUMANDETECTMIN'] = 24    # triggers human-detect interrupt when heat between min and max
         self.settings['HUMANDETECTMAX'] = 30    # triggers human-detect interrupt when head between min and max
 
-
-
-
+        self.settings['RUNSPACENEEDED'] = 100   # Space in cmneeded for robot to be able to run
 
 
 
@@ -142,21 +114,18 @@ class RandomAnimal(Animal):
     # ---------------------------------------------------------------------------------------------
 
     def do_default(self):
-        """Do the default action, which is to look around and move off left, right or forward"""
-        print("Do default")
+        """Do the default action, which is to look around and take appropriate action."""
 
-        # Stop movements ready for scan
-        self.stopCurrentAction()
-        
-        # do_default is a bit like an interrupt
-        self.head.pauseSensors()   # pause sensors while we scan
-        #self._pauseInterrupts()
+        self.log.info("Do default")
+
+        # Get ready for scan
+        self.stopCurrentAction()        # stop anything we are doing
+        self.head.pauseSensors()        # don't monitor sensors
 
         # Do a scan (move head from side-to-side) looking for short distances
         self.log.info("\tScanning")
-        #distances, minpos, maxpos, movement = self.head.scan()
         minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement = self.head.scan()
-        print("\tScan minpos={} maxpos={} movement={}".format(minPos, maxPos, movement))
+        #print("\tScan minpos={} maxpos={} movement={}".format(minPos, maxPos, movement))
 
         # Check what we saw
         if movement:
@@ -166,22 +135,24 @@ class RandomAnimal(Animal):
             self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
             
         elif minDist < self.settings['SHORTDISTANCE'] : 
+            # We saw an obstacle close by
+
             # We are now in escape mode
             self._interruptId = "escape"
             self._interruptValue = 0
 
-            # We are too close to something.  Check if something is left or right.  10 readings on the right side, 11 readings on the left side
-            #obstacleLeft = min(distances[:11]) < self.settings['SHORTDISTANCE']     # something on left
-            obstacleLeft = minLeftDist < self.settings['SHORTDISTANCE']     # something on left
-            #obstacleRight = min(distances[11:]) < self.settings['SHORTDISTANCE']    # something on right
-            obstacleRight = minRightDist < self.settings['SHORTDISTANCE']    # something on right
-            shortestLeft = minPos < 0                                              # shortest distance is on left
-            shortestRight = minPos > 0                                             # shortest distance is on right
-            longestLeft = maxPos < 0                                               # longest distance is on left
-            longestRight = maxPos > 0                                              # longest distance is on right
+            # We are too close to something.  Check if something is left or right.  
+            obstacleLeft = minLeftDist < self.settings['SHORTDISTANCE']         # something on left?
+            obstacleRight = minRightDist < self.settings['SHORTDISTANCE']       # something on right?
+            shortestLeft = minPos < 0                                           # shortest distance is on left?
+            shortestRight = minPos > 0                                          # shortest distance is on right?
+            longestLeft = maxPos < 0                                            # longest distance is on left?
+            longestRight = maxPos > 0                                           # longest distance is on right?
+
+            # Depending on where obstacle is take action
             if obstacleLeft and obstacleRight:
-                # Something on left and right, so back out
-                if longestRight: #shortestLeft:
+                # Something on left and right, so back out so we point in the direction where there is most space
+                if longestRight: 
                     self.log.info("\tObstacle on left and right, more space right, so back out left")
                     self.do_backLeft()
                 elif longestLeft:
@@ -200,48 +171,38 @@ class RandomAnimal(Animal):
                 self.log.info("\tObstacle straight ahead, so back out")
                 self.do_backward()
 
-
             # Whatever we decided to do, return to going forward eventually
-            self._setTimer(30, 'F')                   # back to default when finished !!
+            self._setTimer(30, 'F')                   #  !!
         else:
             # We are not too close to anything
             self.log.info("\tNo issues seen, so move F")
             self.do_forward()
 
-        #self.head.unPauseSensors()   # turn sensors back on 
-        #self._unPauseInterrupts()
-
-    def endInterrupt(self):
-        """Reset back to default behaviour following an interrupt"""
-        #!!redundant?
-        self._clearInterrupt()
-        self.do_default()
-
     def do_forward(self):
-        self.head.move(0, t=1)
-        self.head.unPauseSensors()   # turn sensors back on for moving forwards
-        self._clearInterrupt()
+        '''Forwards is often called after an interrupt, so we also restart the sensors and clear any interrupt'''
+        self.head.move(0, t=1)                  # point head forwards
+        self.head.unPauseSensors()              # turn sensors back on 
+        self._clearInterrupt()                  # clear out any interrupt
         self._handleAction(self._forward, "F")
 
     def do_backward(self):
-        self.head.move(0, t=1)
+        self.head.move(0, t=1)                  # point head forwards
         self._handleAction(self._backward, "B")
 
     def do_backLeft(self):
-        self.head.move(0, t=1)
+        self.head.move(0, t=1)                  # point head forwards
         self._handleAction(self._backLeft, "l")
 
     def do_backRight(self):
-        self.head.move(0, t=1)
+        self.head.move(0, t=1)                  # point head forwards
         self._handleAction(self._backRight, "r")
 
     def clear_left(self):
         """Check if all clear on the left"""
         self.log.info("\tCheck for obstacles on left")
         self.head.pauseSensors()   # pause sensors while we scan
-        #distances, minpos, maxpos = self.head.scanLeft()
         minPos, minDist, maxPos, maxDist = self.head.scanLeft()
-        print("\tminpos={} maxpos={}".format(minPos, maxPos))
+        self.log.info("\tminpos={} maxpos={}".format(minPos, maxPos))
         clear = minDist > self.settings['SHORTDISTANCE']
         self.head.unPauseSensors()   # turn sensors back on 
         return clear
@@ -251,16 +212,16 @@ class RandomAnimal(Animal):
         self.log.info("\tCheck for obstacles on right")
         self.head.pauseSensors()   # pause sensors while we scan
         minPos, minDist, maxPos, maxDist = self.head.scanRight()
-        print("\tminpos={} maxpos={}".format(minPos, maxPos))
+        self.log.info("\tminpos={} maxpos={}".format(minPos, maxPos))
         clear = minDist > self.settings['SHORTDISTANCE']
         self.head.unPauseSensors()   # turn sensors back on 
         return clear
 
     def do_left(self):
-        #print("Do left")
         # Stop movements ready for scan
         self.stopCurrentAction()
         
+        # Check if we can move left
         if self.clear_left():
             self.log.info("\tAll clear")
             self.head.move(-100, t=1)
@@ -273,15 +234,15 @@ class RandomAnimal(Animal):
             self.log.info("\tBlocked on left")
 
     def do_leftNoCheck(self):
+        '''Move left without checking for obstacles'''
         #print("Do left")
         self._handleAction(self._left, "L")
         
-
     def do_right(self):
-        #print("Do right")
         # Stop movements ready for scan
         self.stopCurrentAction()
 
+        # Check if we can move right
         if self.clear_right():      
             self.log.info("\tAll clear")
             self.head.move(100, t=1)
@@ -294,6 +255,7 @@ class RandomAnimal(Animal):
             self.log.info("\tBlocked on right")
 
     def do_rightNoCheck(self):
+        '''Move right without checking for obstacles'''
         #print("Do right")
         self._handleAction(self._right, "R")         
 
@@ -340,6 +302,7 @@ class RandomAnimal(Animal):
         self._handleAction(self._crawl, "-")
 
     def do_checkEscape(self):
+        '''Check if we have escaped from obstacles' by looking for a good distance ahead'''
         dist = self.head.distanceSensor.readMedianCm(3)
         if dist > self.settings['SHORTDISTANCE'] * 2:
             # We have escaped
@@ -349,6 +312,7 @@ class RandomAnimal(Animal):
             print("Still stuck", dist)
 
     def do_checkEscapeLeftAntenna(self):
+        '''Check if we have escaped from a stuck left antenna'''
         if self.leftAntenna.is_pressed:
             print("Still stuck")
         else:
@@ -357,6 +321,7 @@ class RandomAnimal(Animal):
             print("Escaped")
 
     def do_checkEscapeRightAntenna(self):
+        '''Check if we have escaped from a stuck right antenna'''
         if self.rightAntenna.is_pressed:
             print("Still stuck")
         else:
@@ -364,17 +329,19 @@ class RandomAnimal(Animal):
             self._setTimer(0, self._timerAction) # Start immediately
             print("Escaped")
 
+
     # Action management
     # ---------------------------------------------------------------------------------------------
 
     def start(self):
-        """Start the robot"""
+        """Start the robot in random mode"""
         self.do_forward()
         self.head.startSensors()
         self._startRandom()
 
+
     def stop(self):
-        """Stop the robot"""
+        """Stop the robot random mode"""
         #self.showMessage("Stopping","")
         self.log.info("Stopping")
         self._handleAction(None, "W")
@@ -389,25 +356,19 @@ class RandomAnimal(Animal):
 
 
     def _setTimer(self, delay, action):
-        """Cancel any existing timer and replace with this one.  Timers are used to """
-        #print("timer", action, delay)
-        #self.log.info("Set timer {} in {} secs".format(action, delay))
-        #if self.timer is not None:
-        #    self.timer.cancel()
-        self._timerAgeStart = self.age
-        #self.timer = Timer(delay, self.actionFunction[action])
-        #self.timer.start()
-        self._timerDelay = delay
-        self._timerAction = action
+        """Set a new timer to run action after delay seconds """
+        self._timerAgeStart = self.age      # record age when we set the timer
+        self._timerDelay = delay            # how long to wait
+        self._timerAction = action          # the action to carry out when timer comes of age
 
     def _executeTimer(self):
-        #!!surely need to stop previous action?
-        print("_executeTimer", self._timerAction)
+        """Execute the current timer"""
+        self.log.info("_executeTimer {}".format(self._timerAction))
         action = self._timerAction
-        self._timerAction = None
+        self._timerAction = None                    # remove timer
         self._timerDelay = 0
         self._timerAgeStart = 0
-        exec("self."+self.actionFunction[action])
+        exec("self."+self.actionFunction[action])   # run the action
 
     def _startRandom(self):
         """Start a random behaviour generator"""
@@ -418,12 +379,14 @@ class RandomAnimal(Animal):
         """Continue to run random actions until stopped"""
         self._runningRandom = True
         while self._runningRandom:
+            # Timers take first priority
             if self._timerAction is not None:
                 if self.age-self._timerAgeStart >= self._timerDelay:
                     # There is a timer that has come of age, so execute it
                     self._executeTimer()
                     continue
 
+            # Now handle other situations in priority order
             if self._interruptId=="escape":
                 # We are currently trying to escape, so check if we can
                 self.do_checkEscape()
@@ -444,7 +407,7 @@ class RandomAnimal(Animal):
                 # Tracking movement, so let's finish that before we allow another random movement
                 pass
 
-            elif self._currentAction=="F" and self.age % 5 == 0: #!!every 5 seconds
+            elif self._currentAction=="F" and self.age % 5 == 0: # every 5 seconds
                 # No timer, so allow another random, weighted choice
                 # . means no change to current action
                 actions = ['.','S','B','L','R','U','P','E','A','+','-']
@@ -454,15 +417,11 @@ class RandomAnimal(Animal):
 
                 # Don't allow run if not enough space
                 if choice=='+':
-                    if self.head.lastDistance is None:
-                        choice = '.'
-                    elif self.head.lastDistance<100: #!!
+                    if self.head.lastDistance is None or self.head.lastDistance<self.settings['RUNSPACENEEDED']:
                         self.log.info("Not enough distance to run")
                         choice = '.'
-                    else:
-                        pass # !! set time proportional to last distance?
 
-                # Start the choice, and set a timer to start moving forward again after a random period
+                # Start the choice, and set a timer to run default behaviour again after a random period
                 if choice != '.':
                     self.log.info("Initiating action {}".format(choice))
                     exec("self."+self.actionFunction[choice])
@@ -498,6 +457,7 @@ class RandomAnimal(Animal):
                 self.lastHumanDetectAge))
 
             if self.messageCallback is not None:   
+                # Send message to programmer LCD
                 line1 = "{}{}{} {}".format(self._currentAction, 
                             " " if self._timerAction is None else self._timerAction,
                             self._timerDelay,
@@ -508,21 +468,22 @@ class RandomAnimal(Animal):
 
         
 
-
     # Interrupt handling
     # ---------------------------------------------------------------------------------------------
     def interrupt(self, id, value):
+        '''Something caused an interrupt'''
 
         # Don't allow interrupt to be interrupted
         if self._interruptId is not None:
             return
 
-        # !! ignore for now
+        # Ignore human-detect (heat sensing didn't work!)
         if id=="human-detect":
             #print("Ignoring heat detect")
             self.head.unPauseSensors()  
             return
 
+        # Ignore human-detect (heat sensing didn't work!)
         if id=="human-detect" and self.age-self.lastHumanDetectAge < 60:
             print("Bored of humans")  
             self.head.unPauseSensors()  
@@ -530,68 +491,53 @@ class RandomAnimal(Animal):
 
         self.log.info("Interrupt {}".format(id))            
 
+        # Set the interrupt so it will be handled on the next loop in _runRandom()
         self._interruptId = id
         self._interruptValue = value
 
 
     def _handleInterrupt(self):
+        '''There is an interrupt that needs to be handled'''
 
-
-        # Handle the interrupt
+        # Handle the interrupt if no other interrupt currently being handled
         if not self._interruptBeingHandled:
             self.log.info("Handle Interrupt {}".format(self._interruptId))
             self._interruptBeingHandled = True
 
             if self._interruptId=="short-distance":
-                # End interrupt so we do default scan
-                #self.endInterrupt()
-                self.do_default()
-                #self.do_backward()
-                #minmax = self.settings['RANDOMTIME']['B']   
-                #self._setTimer(random.randint(minmax[0],minmax[1]), 'I')       
+                self.do_default()                           # do a scan and decide what to do
 
             elif self._interruptId=="left-antenna":
-                self.do_rightNoCheck()
-                self._interruptId = "escape-left-antenna"
-                self._setTimer(30, 'F')
+                self.do_rightNoCheck()                      # move off right
+                self._interruptId = "escape-left-antenna"   # keep checking antenna
+                self._setTimer(30, 'F')                     # move F after a delay if still stuck
 
             elif self._interruptId=="right-antenna":
-                self.do_leftNoCheck()
-                self._interruptId = "escape-right-antenna"
-                self._setTimer(30, 'F')
+                self.do_leftNoCheck()                       # move off left
+                self._interruptId = "escape-right-antenna"  # keep checking antenna
+                self._setTimer(30, 'F')                     # move F after a delay if still stuck
 
             elif self._interruptId=="human-detect":
-                # 
+                # Not used
                 self.lastHumanDetectAge = self.age
                 self.do_trackMovement()
                 self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
 
             elif self._interruptId=="long-distance":
+                # Not used
                 self._clearInterrupt()
                 self.head.unPauseSensors()  
 
 
-            """
-                self.do_run()
-                #minmax = self.settings['RANDOMTIME']['R']
-                minmax[0] = 2
-                minmax[1] = self._interruptValue / 20 # run time proportional to distance measured
-                self._setTimer(random.randint(minmax[0],minmax[1]), 'I')
-            """
-
     def _clearInterrupt(self):
+        '''Clear any interrupt'''
         self._interruptId = None
         self._interruptBeingHandled = False          
 
     def _randint(self, minmax):
+        '''Generate random int based on minmax list'''
         return random.randint(minmax[0],minmax[1])
 
-    def _unPauseInterrupts(self):
-        self._clearInterrupt()
-
-    def _pauseInterrupts(self):
-        self._interruptId = "paused"
-        self._interruptBeingHandled = True
 
 if __name__ == "__main__":
     print("Testing RandomAnimal")    
@@ -609,22 +555,9 @@ if __name__ == "__main__":
     animal.loadSettings()
 
     print("wakeSlowly(2)")
-    #animal.wakeSlowly(5) 
-    #sleep(2)
+    animal.wakeSlowly(5) 
 
-    #animal.forward()
-
-    # Run through all possible actions
-    """
-    for func in animal.actionFunction.values():
-        print(func)
-        eval("animal."+func)
-        sleep(5)
-    """
-
-    
     # Run the animal in random mode
-
     print("Running animal")
     animal.start()
     while True:

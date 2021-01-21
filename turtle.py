@@ -8,12 +8,12 @@ Implements a 2-legged animal
 
 # Imports
 # -------------------------------------------------------------------------------------------------
-from animal import *
+from random_animal import *
 
 
 # Class
 # -------------------------------------------------------------------------------------------------
-class Turtle(Animal):
+class Turtle(RandomAnimal):
 
     def __init__(self):
         # Insect is an animal

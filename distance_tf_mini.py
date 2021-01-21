@@ -7,7 +7,7 @@ from statistics import median
 
 class DistanceSensor:
 
-    def __init__(self, rxpin):
+    def __init__(self, rxpin, log):
         self.RX = rxpin
 
         self.pi = pigpio.pi()
@@ -16,6 +16,8 @@ class DistanceSensor:
 
         self.minDistance = 5    # min distance sensor can read
         self.maxDistance = 700  # max distance sensor can read
+
+        self.log = log
 
     def __del__(self):
         print("del")
