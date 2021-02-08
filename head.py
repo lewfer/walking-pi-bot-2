@@ -12,6 +12,7 @@ If it detects thermal movement it can track that movement (i.e. the head will fo
 from joint import Joint
 from distance_tf_mini import DistanceSensor
 from thermal_amg88xx import ThermalSensor
+from gpiozero import MotionSensor
 from helpers import remap
 from threading import Thread
 from time import sleep
@@ -43,6 +44,9 @@ class Head:
         self.lastMaxTemperature = None          # last max temperature read from the 8x8 matrix
         self.lastMinTemperature = None          # last min temperature read from the 8x8 matrix
 
+        # Set up the PIR, which is on the tail
+        self.tail = MotionSensor(13)
+
         # Settings - can be overridden by the body
         self.joint.midAngle = 90                # midpoint angle for servo (facing forwards)
         self.joint.highAngle = 135              # high angle for servo (rightmost angle)
@@ -53,7 +57,7 @@ class Head:
         self.humanDetectMinTemperature = 26     # temperature in C which triggers human-detect interrupt
         self.humanDetectMaxTemperature = 30     # temperature in C which triggers human-detect interrupt
         self.colMovementThreshold = 4           # total temperature change in a matrix column above which we say we saw movement
-        self.movementWaitSeconds = 1            # how long to wait between thermal readings to detect movement
+        self.movementWaitSeconds = 2            # how long to wait between thermal readings to detect movement
 
         self.log = log
 
@@ -205,11 +209,12 @@ class Head:
 
         # Check for thermal movement
         self.thermalSensor.readMatrix()  # read
-        sleep(self.movementWaitSeconds)     # wait a bit   
+        #sleep(self.movementWaitSeconds)     # wait a bit   
+        rearMovement = self.tail.wait_for_motion(timeout=self.movementWaitSeconds)
         movement = self.detectMovement() # read again and look for deltas
 
         # Return all the results
-        return minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement
+        return minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement, rearMovement
 
     def scanLeft(self):
         """Scan left side, reading distances at a number of positions.  Returns the index and value of the min and max distance."""
@@ -393,8 +398,8 @@ if __name__ == "__main__":
 
     elif mode==4:
         # Scan left to right and read distances
-        minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement = head.scan()
-        print("minPos={} minDist={} maxPos={} maxDist={} minLeftDist={} minRightDist={} maxLeftDist={} maxRightDist={} movement={}".format(minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement))
+        minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement, rearMovement = head.scan()
+        print("minPos={} minDist={} maxPos={} maxDist={} minLeftDist={} minRightDist={} maxLeftDist={} maxRightDist={} movement={} rearMovement={}".format(minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement, rearMovement))
 
     elif mode==5:
         # Scan left and read distances

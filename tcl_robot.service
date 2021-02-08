@@ -1,0 +1,10 @@
+[Unit]
+Description=TCL Robot systemd service.
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /home/pi/tcl/walking-pi-bot-2/tcl_robot.sh
+
+[Install]
+WantedBy=multi-user.target

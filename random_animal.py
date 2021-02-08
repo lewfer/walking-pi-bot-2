@@ -67,7 +67,8 @@ class RandomAnimal(Animal):
             '+':'do_run()',
             '-':'do_crawl()',
             'M':'do_detectMovement()',
-            'T':'do_trackMovement()'
+            'T':'do_trackMovement()',
+            'J':'do_jump()'
             }
 
 
@@ -124,7 +125,7 @@ class RandomAnimal(Animal):
 
         # Do a scan (move head from side-to-side) looking for short distances
         self.log.info("\tScanning")
-        minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement = self.head.scan()
+        minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement, rearMovement = self.head.scan()
         #print("\tScan minpos={} maxpos={} movement={}".format(minPos, maxPos, movement))
 
         # Check what we saw
@@ -133,6 +134,11 @@ class RandomAnimal(Animal):
             self.log.info("\tSaw a movement")
             self.do_trackMovement()
             self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
+
+        elif rearMovement:
+            self.log.info("\tSaw a rear movement")
+            self.do_turn()
+            self._setTimer(2, '*')
             
         elif minDist < self.settings['SHORTDISTANCE'] : 
             # We saw an obstacle close by
@@ -272,6 +278,7 @@ class RandomAnimal(Animal):
         self._handleAction(self._eat, "E")
 
     def do_sit(self):
+        self._setTimer(self._timerDelay, 'J')   
         self._handleAction(self._sit, "S")
 
     def do_kneesup(self):
@@ -301,6 +308,13 @@ class RandomAnimal(Animal):
     def do_crawl(self):
         self._handleAction(self._crawl, "-")
 
+    def do_turn(self):
+        self._handleAction(self._turn, "O")
+
+    def do_jump(self):
+        self._handleAction(self._jump, "J")
+
+
     def do_checkEscape(self):
         '''Check if we have escaped from obstacles' by looking for a good distance ahead'''
         dist = self.head.distanceSensor.readMedianCm(3)
@@ -308,26 +322,32 @@ class RandomAnimal(Animal):
             # We have escaped
             self._setTimer(0, self._timerAction) # Start immediately
             print("Escaped", dist)
+            self.stopCry()
         else:
             print("Still stuck", dist)
+            self.cry()
 
     def do_checkEscapeLeftAntenna(self):
         '''Check if we have escaped from a stuck left antenna'''
         if self.leftAntenna.is_pressed:
             print("Still stuck")
+            self.cry()
         else:
             # We have escaped
             self._setTimer(0, self._timerAction) # Start immediately
             print("Escaped")
+            self.stopCry()
 
     def do_checkEscapeRightAntenna(self):
         '''Check if we have escaped from a stuck right antenna'''
         if self.rightAntenna.is_pressed:
             print("Still stuck")
+            self.cry()
         else:
             # We have escaped
             self._setTimer(0, self._timerAction) # Start immediately
             print("Escaped")
+            self.stopCry()
 
 
     # Action management

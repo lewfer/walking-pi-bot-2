@@ -26,6 +26,8 @@ import random
 import json
 from head import Head
 from gpiozero import Button
+import RPi.GPIO as GPIO
+GPIO.setmode(GPIO.BCM)
 
 # Constants
 # -------------------------------------------------------------------------------------------------
@@ -47,6 +49,10 @@ class Animal():
         self.head = Head(self.interrupt, self.log)
         self.leftAntenna = Button(6)
         self.rightAntenna = Button(12)
+
+        self.voicePin = 16
+        GPIO.setup(self.voicePin, GPIO.OUT)
+        self.pwm = GPIO.PWM(self.voicePin, 1000)
 
         # Robot health (not used at the moment)
         # Can use these to determine behaviour, e.g. slowing down as energy drops
@@ -73,6 +79,11 @@ class Animal():
 
         self.log.info("Created Animal")
 
+    def cry(self):
+        self.pwm.start(50)
+
+    def stopCry(self):
+        self.pwm.ChangeDutyCycle(0)
 
     # Construction
     # ---------------------------------------------------------------------------------------------
@@ -909,8 +920,81 @@ class Animal():
             self._runOnThread(right, 'sit', {'t':t})    
 
         # Wait for all threads to stop
-        self._joinThreads(threads)         
-   
+        self._joinThreads(threads)        
+
+
+    def _jump(self):
+        self._alert(t=0)
+
+
+    def _turn(self):
+        '''Turn around'''
+
+        self._stopped = False
+
+        speed = 10
+
+        for i in range(4): #!! will depend on size/shape of robot
+            # Move limbs into position, one at a time
+            # ---------------------------------------
+                               
+            t = self.settings['REACHTIME'] / speed
+
+            # Move front limbs
+            self._runOnThread('L0', 'reachBackward', {'t':t})
+            self._joinThreads(['L0'])
+            self._waitRandom() 
+            self._runOnThread('R0', 'reachForward', {'t':t})
+            self._joinThreads(['R0'])
+            self._waitRandom() 
+
+            if self.numLegs > 2:
+                # Move middle limbs
+                self._runOnThread('L1', 'reachForward', {'t':t})
+                self._waitRandom() 
+                self._runOnThread('R1', 'reachBackward', {'t':t})
+                self._joinThreads(['L1','R1'])
+                self._waitRandom() 
+
+            if self.numLegs > 4:
+                # Move rear limbs
+                self._runOnThread('L2', 'reachForward', {'t':t})
+                self._joinThreads(['L2'])
+                self._waitRandom() 
+                self._runOnThread('R2', 'reachBackward', {'t':t})
+                self._joinThreads(['R2'])
+                self._waitRandom() 
+
+            t = self.settings['PUSHTIME'] / speed
+
+            # Move limbs together
+            # -------------------
+
+            # Move front limbs
+            self._runOnThread('L0', 'pushForward', {'t':t})
+            self._runOnThread('R0', 'pushBackward', {'t':t})
+            legs = ['L0','R0']
+
+            if self.numLegs > 2:
+                sleep(self.settings['PUSHDELAY'])
+                self._runOnThread('L1', 'pushBackward', {'t':t})
+                self._runOnThread('R1', 'pushForward', {'t':t})
+                legs = ['L1','R1']
+
+            if self.numLegs > 4:
+                sleep(self.settings['PUSHDELAY'])
+                self._runOnThread('L2', 'pushBackward', {'t':t})
+                self._runOnThread('R2', 'pushForward', {'t':t})
+                legs = ['L2','R2']
+
+            # Wait for all legs to stop
+            self._joinThreads(legs)
+
+            # If request was made to end walk, break out of loop
+            if self._stopped:
+                break  
+
+        self._stopMovements()
 
     def _kneesup(self, t=1):
         '''Lift knees all the way up'''
