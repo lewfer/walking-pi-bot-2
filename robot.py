@@ -289,7 +289,17 @@ class Robot(Programmer):
 
             if optionName=="update":
                 self.showMessage("TODO", None)
-                result = subprocess.check_output('~', shell=True).decode("utf-8") 
+                #result = subprocess.check_output('~/update-walking-pi-bot-2.sh', shell=True).decode("utf-8") 
+                #print(result)
+
+                process = subprocess.run('~/update-walking-pi-bot-2.sh',
+                                                shell=True,
+                                                stdout=subprocess.PIPE, 
+                                                stderr=subprocess.PIPE,
+                                                universal_newlines=True)
+                print("Stdout\n", process.stdout)
+                print("Stderr\n", process.stderr)
+
 
             
         self.knob.stop()
