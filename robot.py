@@ -11,6 +11,7 @@ The robot will start its default behaviour (call to start()) but can be stopped 
 # -------------------------------------------------------------------------------------------------
 from turtle import *
 from programmer import *
+import subprocess
 
 class Robot(Programmer):
 
@@ -270,6 +271,29 @@ class Robot(Programmer):
             self.showMessage("Settings reset","")
             sleep(2)     
 
+    def updateCode(self):
+        '''Get a new version of code from github'''
+
+        # Set up options
+        options = ["return",".",".",".","update"]
+        self.showOptions(options)
+
+        self.showMessage("Update Code", None)
+
+        # Start calibrating
+        counter = 0
+        while True: 
+            # Get option selected
+            optionName = self.getSelectedOption(options)     
+            #print(optionName)
+
+            if optionName=="update":
+                self.showMessage("TODO", None)
+                result = subprocess.check_output('~', shell=True).decode("utf-8") 
+
+            
+        self.knob.stop()
+
 
     # Testing
     # ---------------------------------------------------------------------------------------------
@@ -376,7 +400,7 @@ menu = {
             "main/stop" : "animal.stop()",
             "main/start" : "animal.start()",
 
-            "main/menu":["return", "calibrate", "90d", "test", "freset"],
+            "main/menu":["return", "calibrate", "90d", "test", "config"],
             
             "main/menu/calibrate": ["return", "defs", "hips", "knees", "."],
 
@@ -420,8 +444,10 @@ menu = {
             "main/menu/test/head/move": "testHeadMovements()",
             "main/menu/test/head/heat": "testHotspot()",
 
+            "main/menu/config":["return", "freset", "update", ".", "."],
 
-            "main/menu/freset" : "factoryReset()"
+            "main/menu/config/freset" : "factoryReset()",
+            "main/menu/config/update" : "updateCode()"
         }
 
 robot = Robot(Turtle(), menu)
