@@ -271,24 +271,44 @@ class Robot(Programmer):
             self.showMessage("Settings reset","")
             sleep(2)     
 
+    def getCodeVersion(self):
+        '''Get the code version no'''
+
+        # Load settings over the defaults
+        try:
+            # Try to load the settings file
+            with open("version.txt") as f:
+                version = f.read()
+
+            return version
+                
+        except FileNotFoundError:
+            # 
+            return "None"
+
+
+
     def updateCode(self):
         '''Get a new version of code from github'''
 
         # Set up options
         options = ["return",".",".",".","update"]
-        self.showOptions(options)
 
         self.showMessage("Update Code", None)
 
         # Start calibrating
         counter = 0
         while True: 
+            version = self.getCodeVersion()
+            print(version)
+            self.showOptions(options, "Version:"+version)
+
             # Get option selected
             optionName = self.getSelectedOption(options)     
             #print(optionName)
 
             if optionName=="update":
-                self.showMessage("TODO", None)
+                self.showMessage("Updating...", None)
                 #result = subprocess.check_output('~/update-walking-pi-bot-2.sh', shell=True).decode("utf-8") 
                 #print(result)
 
@@ -299,12 +319,15 @@ class Robot(Programmer):
                                                 universal_newlines=True)
                 print("Stdout\n", process.stdout)
                 print("Stderr\n", process.stderr, len(process.stderr))
+                if len(process.stderr)>0:
+                    self.showMessage("Failed", process.stderr[:15])
+                    sleep(2)
+                else:
+                    self.showMessage("Updated", None)
 
             elif optionName=="return":
                 break  
 
-            
-        self.knob.stop()
 
 
     # Testing
