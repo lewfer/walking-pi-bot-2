@@ -298,8 +298,10 @@ class Robot(Programmer):
                                                 stderr=subprocess.PIPE,
                                                 universal_newlines=True)
                 print("Stdout\n", process.stdout)
-                print("Stderr\n", process.stderr)
+                print("Stderr\n", process.stderr, len(process.stderr))
 
+            elif optionName=="return":
+                break  
 
             
         self.knob.stop()
