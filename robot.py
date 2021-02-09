@@ -486,7 +486,7 @@ menu = {
         }
 
 robot = Robot(Turtle(), menu)
-robot.start()
+robot.animal.start()
 robot.runMenu("main")
 
 
