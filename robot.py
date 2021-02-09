@@ -277,7 +277,7 @@ class Robot(Programmer):
         # Load settings over the defaults
         try:
             # Try to load the settings file
-            with open("version.txt") as f:
+            with open("/home/pi/tcl/walking-pi-bot-2/version.txt") as f:
                 version = f.read().strip()
 
             return version
@@ -312,7 +312,7 @@ class Robot(Programmer):
                 #result = subprocess.check_output('~/update-walking-pi-bot-2.sh', shell=True).decode("utf-8") 
                 #print(result)
 
-                process = subprocess.run('~/update-walking-pi-bot-2.sh',
+                process = subprocess.run('/home/pi/update-walking-pi-bot-2.sh',
                                                 shell=True,
                                                 stdout=subprocess.PIPE, 
                                                 stderr=subprocess.PIPE,
@@ -437,13 +437,13 @@ menu = {
 
             "main/menu":["return", "calibrate", "90d", "test", "config"],
             
-            "main/menu/calibrate": ["return", "defs", "hips", "knees", "."],
+            "main/menu/calibrate": ["return", "mids", "hips", "knees", "."],
 
-            "main/menu/calibrate/defs": ["return", "Lknee", "Rknee", "Lhip", "Rhip"],
-            "main/menu/calibrate/defs/Lknee": "calibrateLeftKnee()",
-            "main/menu/calibrate/defs/Lhip": "calibrateLeftHip()",
-            "main/menu/calibrate/defs/Rknee": "calibrateRightKnee()",
-            "main/menu/calibrate/defs/Rhip": "calibrateRightHip()",
+            "main/menu/calibrate/mids": ["return", "Lknee", "Rknee", "Lhip", "Rhip"],
+            "main/menu/calibrate/mids/Lknee": "calibrateLeftKnee()",
+            "main/menu/calibrate/mids/Lhip": "calibrateLeftHip()",
+            "main/menu/calibrate/mids/Rknee": "calibrateRightKnee()",
+            "main/menu/calibrate/mids/Rhip": "calibrateRightHip()",
 
             "main/menu/calibrate/hips": ["return", "front", ".", "back", "."],
             "main/menu/calibrate/knees": ["return", "up", ".", "down", "."],
