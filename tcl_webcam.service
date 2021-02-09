@@ -1,0 +1,10 @@
+[Unit]
+Description=TCL Webcam systemd service.
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /home/pi/tcl/walking-pi-bot-2/tcl_webcam.sh
+
+[Install]
+WantedBy=multi-user.target

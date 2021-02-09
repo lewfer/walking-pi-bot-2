@@ -279,8 +279,8 @@ class RandomAnimal(Animal):
         self._handleAction(self._eat, "E")
 
     def do_sit(self):
-        self._setTimer(self._timerDelay, 'J')   
         self._handleAction(self._sit, "S")
+
 
     def do_kneesup(self):
         self._handleAction(self._kneesup, "^")
@@ -314,6 +314,7 @@ class RandomAnimal(Animal):
 
     def do_jump(self):
         self._handleAction(self._jump, "J")
+        self._setTimer(5, 'F') 
 
 
     def do_checkEscape(self):
@@ -446,7 +447,11 @@ class RandomAnimal(Animal):
                 if choice != '.':
                     self.log.info("Initiating action {}".format(choice))
                     exec("self."+self.actionFunction[choice])
-                    self._setTimer(self._randint(self.settings['RANDOMTIME'][choice]), '*')                   
+
+                    if choice in ['S','U']:
+                        self._setTimer(self._randint(self.settings['RANDOMTIME'][choice]), 'J')                   
+                    else:
+                        self._setTimer(self._randint(self.settings['RANDOMTIME'][choice]), '*')                   
 
             sleep(self.settings['TICKPERIOD'])
 

@@ -153,7 +153,7 @@ class Leg():
         
         # Move hip and knee together using threads, waiting for all threads to stop before continuing  
         hipOffset = 0                           # hip to neutral
-        kneeOffset = -10 * self.direction       # knee down a bit
+        kneeOffset = +10 * self.direction       # knee down a bit
         t1 = Thread(target=self.knee.moveRelativeToMid, kwargs={'deltaAngle':kneeOffset, 'secs':t})
         t1.name = "sit t1"
         t2 = Thread(target=self.hip.moveRelativeToMid, kwargs={'deltaAngle':0, 'secs':t}) 
@@ -162,7 +162,7 @@ class Leg():
 
     def alert(self, t=1):
         '''Put the leg into an alert state, with the knee at the lowest position, raising the animal up'''
-        
+    
         # Move hip and knee together using threads, waiting for all threads to stop before continuing  
         hipOffset = 0
         kneeOffset = 0
