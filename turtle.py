@@ -17,7 +17,7 @@ class Turtle(RandomAnimal):
 
     def __init__(self):
         # Insect is an animal
-        Animal.__init__(self)     
+        RandomAnimal.__init__(self)     
 
         # With 2 legs           
         self.addPairOfLegs(Leg(Joint(0), Joint(1), 1), Leg(Joint(2), Joint(3), -1))

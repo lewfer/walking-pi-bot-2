@@ -51,13 +51,18 @@ class DistanceSensor:
 
             buffer = bytearray()
             count = 0
+            tries2 = 0
             while count<9:
+                tries2 += 1
                 (count, recv) = self.pi.bb_serial_read(self.RX)
                 if count>0:
                     #print("buffer",type(buffer), count)
                     #print("+",end="")
                     buffer += recv
                 time.sleep(0.02)
+                if tries2>20:
+                    return self.maxDistance
+
             #self.p(buffer[:10])
             count = len(buffer)
 

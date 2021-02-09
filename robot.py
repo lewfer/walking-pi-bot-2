@@ -278,7 +278,7 @@ class Robot(Programmer):
         try:
             # Try to load the settings file
             with open("version.txt") as f:
-                version = f.read()
+                version = f.read().strip()
 
             return version
                 
@@ -486,7 +486,7 @@ menu = {
         }
 
 robot = Robot(Turtle(), menu)
-#robot.start()
+robot.start()
 robot.runMenu("main")
 
 

@@ -302,7 +302,8 @@ class Animal():
     def runAction(self, func):  
         '''Stop any current action and start a new one if func is provided'''
 
-        self.log.info("runAction {}".format(func.__name__))
+        if func is not None:
+            self.log.info("runAction {}".format(func.__name__))
         self.stopCurrentAction()
         if func is not None:
             self._actionThread = Thread(target=func)

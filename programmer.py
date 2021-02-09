@@ -147,7 +147,7 @@ class Programmer():
             self.showOptions(options)
         else:
             # Not a list, so must be a command.  Run it.
-            print("Exectuting", options)
+            print("Executing", options)
             exec("self."+options)
             return
 

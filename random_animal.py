@@ -138,7 +138,7 @@ class RandomAnimal(Animal):
         elif rearMovement:
             self.log.info("\tSaw a rear movement")
             self.do_turn()
-            self._setTimer(2, '*')
+            self._setTimer(6, '*') #!!turn time
             
         elif minDist < self.settings['SHORTDISTANCE'] : 
             # We saw an obstacle close by
@@ -269,6 +269,7 @@ class RandomAnimal(Animal):
         self._handleAction(None, "W")
 
     def do_unwind(self):
+        self._setTimer(self._timerDelay, 'J')   
         self._handleAction(self._unwind, "U")
 
     def do_point(self):
