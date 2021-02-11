@@ -138,7 +138,7 @@ class RandomAnimal(Animal):
         elif rearMovement:
             self.log.info("\tSaw a rear movement")
             self.do_turn()
-            self._setTimer(6, '*') #!!turn time
+            self._setTimer(16, '*') #!!turn time
             
         elif minDist < self.settings['SHORTDISTANCE'] : 
             # We saw an obstacle close by

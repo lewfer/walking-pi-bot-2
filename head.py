@@ -56,7 +56,7 @@ class Head:
         self.longDistance = 1000                # distance in cm to obstacle above which triggers a long-distance interrupt
         self.humanDetectMinTemperature = 26     # temperature in C which triggers human-detect interrupt
         self.humanDetectMaxTemperature = 30     # temperature in C which triggers human-detect interrupt
-        self.colMovementThreshold = 4           # total temperature change in a matrix column above which we say we saw movement
+        self.colMovementThreshold = 5           # total temperature change in a matrix column above which we say we saw movement
         self.movementWaitSeconds = 2            # how long to wait between thermal readings to detect movement
 
         self.log = log

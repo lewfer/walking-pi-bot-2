@@ -935,7 +935,7 @@ class Animal():
 
         speed = 10
 
-        for i in range(4): #!! will depend on size/shape of robot
+        for i in range(7): #!! will depend on size/shape of robot
             # Move limbs into position, one at a time
             # ---------------------------------------
                                

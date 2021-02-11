@@ -103,26 +103,26 @@ class lcd:
    def __init__(self, address=ADDRESS):
       self.lcd_device = i2c_device(address)
 
-      print("1")
+      #print("1")
       self.backlight = LCD_BACKLIGHT
 
-      print("2")
+      #print("2")
       self._lcd_write(0x03)
       self._lcd_write(0x03)
       self._lcd_write(0x03)
       self._lcd_write(0x02)
 
-      print("3")
+      #print("3")
       self._lcd_write(LCD_FUNCTIONSET | LCD_2LINE | LCD_5x8DOTS | LCD_4BITMODE)
       self._lcd_write(LCD_DISPLAYCONTROL | LCD_DISPLAYON)
       self._lcd_write(LCD_CLEARDISPLAY)
       self._lcd_write(LCD_ENTRYMODESET | LCD_ENTRYLEFT)
 
-      print("4")
+      #print("4")
       self.locked = False
 
       sleep(0.2)
-      print("5")
+      #print("5")
 
    def lock(self):
       if self.locked: return False

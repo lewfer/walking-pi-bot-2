@@ -49,14 +49,14 @@ class Programmer():
         """Show the lines on the LCD, if present"""
         try:
             if self.lcd is None:
-                print("Creating LCD", self.lcd)
+                #print("Creating LCD", self.lcd)
                 self.lcd = RPi_I2C_driver.lcd(0x3f)
                 print(self.lcd)
             #self.lcd.lcd_clear()
             if line1 is not None: self.lcd.lcd_display_string(line1, 1)
             if line2 is not None: self.lcd.lcd_display_string(line2, 2)
         except Exception as e:
-            print("Trapped exception when creating LCD", e)
+            #print("Trapped exception when creating LCD", e)
             self.lcd = None
 
 
