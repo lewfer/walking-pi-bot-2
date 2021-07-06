@@ -1,18 +1,27 @@
-from turtle import Turtle
+from turtle import *
+from lizard import *
 from leg import Leg
 from joint import Joint
 
-# Create animal
-animal = Turtle()
+# Work out the mode - default to Turtle
+mode = "Turtle"
+try:
+    f = open("mode.txt", "r")
+    mode = f.read()
+    mode = mode.strip()
+except Exception:
+    pass
+print("Mode",mode)
 
-# With 2 legs           
-animal.addPairOfLegs(Leg(Joint(0), Joint(1), 1), Leg(Joint(2), Joint(3), -1))
+# Create animal
+animal = eval(mode+"()")
 
 def set90Degrees():
-    '''Set all motors to 90 degrees'''
-    animal.legPairs[0].left.knee.moveDirectTo(90)
-    animal.legPairs[0].left.hip.moveDirectTo(90)
-    animal.legPairs[0].right.knee.moveDirectTo(90)
-    animal.legPairs[0].right.hip.moveDirectTo(90)
+    for legPair in animal.legPairs:
+        '''Set all motors to 90 degrees'''
+        legPair.left.knee.moveDirectTo(90)
+        legPair.left.hip.moveDirectTo(90)
+        legPair.right.knee.moveDirectTo(90)
+        legPair.right.hip.moveDirectTo(90)
 
 set90Degrees()

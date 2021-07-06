@@ -10,6 +10,7 @@ The robot will start its default behaviour (call to start()) but can be stopped 
 # Imports
 # -------------------------------------------------------------------------------------------------
 from turtle import *
+from lizard import *
 from programmer import *
 import subprocess
 
@@ -35,44 +36,36 @@ class Robot(Programmer):
     # Calibration
     # ---------------------------------------------------------------------------------------------
 
-    def calibrateLeftHip(self):
+    def calibrateLeftHip(self, legPair):
         print("Calibrate left hip mid position")
-        legPair = 0
         self.calibrateJointMid(self.animal.legPairs[legPair].left.hip, self.animal.settings["leg_ranges"][legPair]["left"]["hip"], "L hip")
 
-    def calibrateLeftKnee(self):
+    def calibrateLeftKnee(self, legPair):
         print("Calibrate left knee position")
-        legPair = 0
         self.calibrateJointMid(self.animal.legPairs[legPair].left.knee, self.animal.settings["leg_ranges"][legPair]["left"]["knee"], "L knee")
 
-    def calibrateRightHip(self):
+    def calibrateRightHip(self, legPair):
         print("Calibrate right hip position")
-        legPair = 0
         self.calibrateJointMid(self.animal.legPairs[legPair].right.hip, self.animal.settings["leg_ranges"][legPair]["right"]["hip"], "R hip")
 
-    def calibrateRightKnee(self):
+    def calibrateRightKnee(self, legPair):
         print("Calibrate right knee position")        
-        legPair = 0
         self.calibrateJointMid(self.animal.legPairs[legPair].right.knee, self.animal.settings["leg_ranges"][legPair]["right"]["knee"], "R knee")
 
-    def calibrateHipsFront(self):
+    def calibrateHipsFront(self, legPair):
         print("Calibrate hips front position")
-        legPair = 0
         self.calibrateHips(LEG_FRONT, legPair, "Hips front")
 
-    def calibrateHipsBack(self):
+    def calibrateHipsBack(self, legPair):
         print("Calibrate hips back position")
-        legPair = 0
         self.calibrateHips(LEG_BACK, legPair, "Hips back")   
 
-    def calibrateKneesUp(self):
+    def calibrateKneesUp(self, legPair):
         print("Calibrate knees up position")
-        legPair = 0
         self.calibrateKnees(LEG_UP, legPair, "Knees up")   
 
-    def calibrateKneesDown(self):
+    def calibrateKneesDown(self, legPair):
         print("Calibrate knees down position")
-        legPair = 0
         self.calibrateKnees(LEG_DOWN, legPair, "Knees down") 
 
     def calibrateHips(self, pos, legPair, name):
@@ -437,21 +430,40 @@ menu = {
 
             "main/menu":["return", "calibrate", "90d", "test", "config"],
             
-            "main/menu/calibrate": ["return", "mids", "hips", "knees", "."],
+            "main/menu/calibrate": ["return", "fore", "rear", ".", "."],
 
-            "main/menu/calibrate/mids": ["return", "Lknee", "Rknee", "Lhip", "Rhip"],
-            "main/menu/calibrate/mids/Lknee": "calibrateLeftKnee()",
-            "main/menu/calibrate/mids/Lhip": "calibrateLeftHip()",
-            "main/menu/calibrate/mids/Rknee": "calibrateRightKnee()",
-            "main/menu/calibrate/mids/Rhip": "calibrateRightHip()",
+            "main/menu/calibrate/fore": ["return", "mids", "hips", "knees", "."],
+            "main/menu/calibrate/rear": ["return", "mids", "hips", "knees", "."],
 
-            "main/menu/calibrate/hips": ["return", "front", ".", "back", "."],
-            "main/menu/calibrate/knees": ["return", "up", ".", "down", "."],
+            "main/menu/calibrate/fore/mids": ["return", "Lknee", "Rknee", "Lhip", "Rhip"],
+            "main/menu/calibrate/fore/mids/Lknee": "calibrateLeftKnee(0)",
+            "main/menu/calibrate/fore/mids/Lhip": "calibrateLeftHip(0)",
+            "main/menu/calibrate/fore/mids/Rknee": "calibrateRightKnee(0)",
+            "main/menu/calibrate/fore/mids/Rhip": "calibrateRightHip(0)",
 
-            "main/menu/calibrate/hips/front": "calibrateHipsFront()",
-            "main/menu/calibrate/hips/back": "calibrateHipsBack()",
-            "main/menu/calibrate/knees/up": "calibrateKneesUp()",
-            "main/menu/calibrate/knees/down": "calibrateKneesDown()",
+            "main/menu/calibrate/fore/hips": ["return", "front", ".", "back", "."],
+            "main/menu/calibrate/fore/knees": ["return", "up", ".", "down", "."],
+
+            "main/menu/calibrate/fore/hips/front": "calibrateHipsFront(0)",
+            "main/menu/calibrate/fore/hips/back": "calibrateHipsBack(0)",
+            "main/menu/calibrate/fore/knees/up": "calibrateKneesUp(0)",
+            "main/menu/calibrate/fore/knees/down": "calibrateKneesDown(0)",
+
+            "main/menu/calibrate/rear/mids": ["return", "Lknee", "Rknee", "Lhip", "Rhip"],
+            "main/menu/calibrate/rear/mids/Lknee": "calibrateLeftKnee(1)",
+            "main/menu/calibrate/rear/mids/Lhip": "calibrateLeftHip(1)",
+            "main/menu/calibrate/rear/mids/Rknee": "calibrateRightKnee(1)",
+            "main/menu/calibrate/rear/mids/Rhip": "calibrateRightHip(1)",
+
+            "main/menu/calibrate/rear/hips": ["return", "front", ".", "back", "."],
+            "main/menu/calibrate/rear/knees": ["return", "up", ".", "down", "."],
+
+            "main/menu/calibrate/rear/hips/front": "calibrateHipsFront(1)",
+            "main/menu/calibrate/rear/hips/back": "calibrateHipsBack(1)",
+            "main/menu/calibrate/rear/knees/up": "calibrateKneesUp(1)",
+            "main/menu/calibrate/rear/knees/down": "calibrateKneesDown(1)",
+
+
 
             "main/menu/90d": "set90Degrees()",
 
@@ -485,8 +497,18 @@ menu = {
             "main/menu/config/update" : "updateCode()"
         }
 
-robot = Robot(Turtle(), menu)
-robot.animal.start()
+# Work out the mode - default to Turtle
+mode = "Turtle"
+try:
+    f = open("mode.txt", "r")
+    mode = f.read()
+    mode = mode.strip()
+except Exception:
+    pass
+print("Mode",mode)
+
+robot = Robot(eval(mode+"()"), menu)
+#!!robot.animal.start()
 robot.runMenu("main")
 
 

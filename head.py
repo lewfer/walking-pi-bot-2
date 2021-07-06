@@ -26,7 +26,7 @@ class Head:
         self.interruptCallback = interruptCallback
 
         ## Set up the joint on the given Servo Bonnet pin
-        self.joint = Joint(4)
+        self.joint = Joint(15)
 
         # Set up the distance sensor on the given RPi pin
         self.distanceSensor = DistanceSensor(14, log)
