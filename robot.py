@@ -253,10 +253,11 @@ class Robot(Programmer):
         '''Set all motors to 90 degrees'''
         self.showMessage("Setting to 90","degrees")
         sleep(1)
-        self.animal.legPairs[0].left.knee.moveDirectTo(90)
-        self.animal.legPairs[0].left.hip.moveDirectTo(90)
-        self.animal.legPairs[0].right.knee.moveDirectTo(90)
-        self.animal.legPairs[0].right.hip.moveDirectTo(90)
+        for legPair in self.animal.legPairs:
+            legPair.left.knee.moveDirectTo(90)
+            legPair.left.hip.moveDirectTo(90)
+            legPair.right.knee.moveDirectTo(90)
+            legPair.right.hip.moveDirectTo(90)
 
     def factoryReset(self):
         if self.yesNo("Factory Reset?"):
@@ -508,7 +509,7 @@ except Exception:
 print("Mode",mode)
 
 robot = Robot(eval(mode+"()"), menu)
-#!!robot.animal.start()
+robot.animal.start()
 robot.runMenu("main")
 
 
