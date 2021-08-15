@@ -139,7 +139,7 @@ class RandomAnimal(Animal):
         elif rearMovement:
             self.log.info("\tSaw a rear movement")
             self.do_turn()
-            self._setTimer(16, '*') #!!turn time
+            self._setTimer(16, 'K') #!!turn time
             
         elif minDist < self.settings['SHORTDISTANCE'] : 
             # We saw an obstacle close by
@@ -190,6 +190,8 @@ class RandomAnimal(Animal):
 
         self.log.info("Do look")
 
+        self._timerAction = None
+
         # Get ready for scan
         self.stopCurrentAction()        # stop anything we are doing
         self.head.pauseSensors()        # don't monitor sensors
@@ -207,9 +209,9 @@ class RandomAnimal(Animal):
             self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
 
         elif rearMovement:
-            self.log.info("\tSaw a rear movement")
-            self.do_turn()
-            self._setTimer(16, '*') #!!turn time
+            self.log.info("\tSaw a rear movement")  
+            self.do_turn()            
+            self._setTimer(16, 'K') #!!turn time
 
         else:
             # Carry on
@@ -222,6 +224,7 @@ class RandomAnimal(Animal):
         self.head.move(0, t=1)                  # point head forwards
         self.head.unPauseSensors()              # turn sensors back on 
         self._clearInterrupt()                  # clear out any interrupt
+        self.stopCry()
         self._handleAction(self._forward, "F")
 
     def do_backward(self):
@@ -359,7 +362,7 @@ class RandomAnimal(Animal):
             print("Escaped", dist)
             self.stopCry()
         else:
-            print("Still stuck", dist)
+            print("Still stuck", dist, "cm")
             self.cry()
 
     def do_checkEscapeLeftAntenna(self):
@@ -393,6 +396,8 @@ class RandomAnimal(Animal):
         self.do_forward()
         self.head.startSensors()
         self._startRandom()
+        
+        self.stopCry()
 
 
     def stop(self):
@@ -406,9 +411,10 @@ class RandomAnimal(Animal):
 
     def _handleAction(self, func, msg):  
         """Stop any current action and start a new one"""
+
+        #if not self._stopped:
         self.runAction(func)
         self._currentAction = msg
-
 
     def _setTimer(self, delay, action):
         """Set a new timer to run action after delay seconds """
@@ -466,6 +472,7 @@ class RandomAnimal(Animal):
                 # No timer, so allow another random, weighted choice
                 # . means no change to current action
                 actions = ['.','S','B','L','R','U','P','E','A','+','-','K']
+                #actions = ['.','.','.','.','.','.','.','.','.','.','.','K'] #!!
                 weights = self.settings['RANDOMWEIGHTS']
                 choice = random.choices(actions, weights)[0]
                 self.log.info("random {}".format(choice))
@@ -483,7 +490,7 @@ class RandomAnimal(Animal):
 
                     if choice in ['S','U']:
                         self._setTimer(self._randint(self.settings['RANDOMTIME'][choice]), 'J')                   
-                    else:
+                    elif choice != 'K':
                         self._setTimer(self._randint(self.settings['RANDOMTIME'][choice]), '*')                   
 
             sleep(self.settings['TICKPERIOD'])
@@ -508,12 +515,14 @@ class RandomAnimal(Animal):
                 timerMsg = "{}_when_done".format(self._timerAction)
             else:
                 timerMsg = "{}_in_{}s (of {}s)".format(self._timerAction, self._timerDelay-(self.age-self._timerAgeStart), self._timerDelay)
-            self.log.info("\t{} age={} alertness={} energy={} timernext={} threadcount={} interrupt={} dist={} temp={},{} human={}".format(
-                self._currentAction, self.age, self.alertness, self.energy, 
+
+            # alertness={} energy={}  human={} self.alertness, self.energy, self.lastHumanDetectAge
+            self.log.info("\t{} age={} timernext={} threadcount={} interrupt={} dist={} temp={},{}".format(
+                self._currentAction, self.age, 
                 timerMsg,
                 activeCount(), self._interruptId, 
                 self.head.lastDistance, self.head.lastMinTemperature,self.head.lastMaxTemperature,
-                self.lastHumanDetectAge))
+                ))
 
             if self.messageCallback is not None:   
                 # Send message to programmer LCD
@@ -609,6 +618,9 @@ if __name__ == "__main__":
 
     # With 2 legs           
     animal.addPairOfLegs(Leg(Joint(0), Joint(1), 1), Leg(Joint(2), Joint(3), -1))
+
+    # With 4 legs           
+    animal.addPairOfLegs(Leg(Joint(4), Joint(5), 1), Leg(Joint(6), Joint(7), -1))
 
     # Load settings from json file
     animal.loadSettings()

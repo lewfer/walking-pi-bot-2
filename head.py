@@ -120,7 +120,7 @@ class Head:
         # React depending on if hot spot (i.e. most movement) is to the left or right
         if (colmovements[hotcol]>self.colMovementThreshold):
 
-            self._printCols(colmovements, indent="\t")
+            self._printCols(colmovements, indent="\tTrack movement ")
             
              # If movement detected move head by amount depending on which col saw the movement
             offset = 1    # offset from centre to detect (centre detection won't cause movement)
@@ -143,7 +143,8 @@ class Head:
             return True
         else:
             # No movement
-            print("No movement")
+            #print("No movement")
+            #print("~", end="")
             return False
 
 

@@ -69,7 +69,7 @@ class DistanceSensor:
 
 
             if tries>10:
-                print("Trouble getting distances", tries)
+                #print("Trouble getting distances", tries)
                 time.sleep(0.2)
 
             # Search for the header bytes
@@ -108,7 +108,7 @@ class DistanceSensor:
                         # I noticed that high strength measurements were unreliable
                         #if strength>32767 or strength<100:
                         if strength>40000 or strength<20:
-                            print("strength failed", strength, distance)
+                            #print("strength failed", strength, distance)
                             distance = -1
 
                         #if True: #distance <= 1200 and strength < 2000:

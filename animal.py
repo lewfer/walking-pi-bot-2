@@ -80,7 +80,7 @@ class Animal():
         self.log.info("Created Animal")
 
     def cry(self):
-        self.pwm.start(50)
+        self.pwm.start(100)
 
     def stopCry(self):
         self.pwm.ChangeDutyCycle(0)
@@ -304,6 +304,7 @@ class Animal():
 
         if func is not None:
             self.log.info("runAction {}".format(func.__name__))
+
         self.stopCurrentAction()
         if func is not None:
             self._actionThread = Thread(target=func)
@@ -1132,6 +1133,8 @@ class Animal():
 
         self._stopped = False
 
+        self.cry()
+
         # Bounce for a bit
         self._bounce()
 
@@ -1146,7 +1149,7 @@ class Animal():
             # Track the movement that was detected
             if self.head.trackMovement():
                 noMovementCount = 0 # reset
-                self.log.info("Still tracking")
+                #self.log.info("Still tracking")
             else:
                 noMovementCount += 1
                 if noMovementCount > 30: #!!
@@ -1160,7 +1163,9 @@ class Animal():
                 self.log.info("Stopped track movement")
                 break         
 
-            sleep(0.2)                   
+            sleep(0.2)
+        
+        self.stopCry()
 
     def _trackHotspot(self):
         # Put in alert state
@@ -1236,7 +1241,7 @@ if __name__ == "__main__":
 
     t = 10
 
-    animal.runAction(animal._forward)
+    animal.runAction(animal._trackMovement)
     sleep(10)
 
 """

@@ -388,7 +388,7 @@ class Robot(Programmer):
             if optionName=="return":
                 break           
 
-    def tesTrackHotspot(self):
+    def testTrackHotspot(self):
         """Follow heat with head"""
         options = ["return",".",".",".","."]
         self.showOptions(options)
@@ -402,7 +402,10 @@ class Robot(Programmer):
             if optionName=="return":
                 break          
 
-        
+    def testCry(self):
+        self.animal.cry()
+        sleep(5)
+        self.animal.stopCry()
 
     def test(self, action):
         """Test an action"""
@@ -479,7 +482,7 @@ menu = {
             "main/menu/test/moves1": ["return", "forward", "backward", "left", "right"],
             "main/menu/test/moves2": ["return", "unwind", "point", "eat", "sit"],
             "main/menu/test/sensors": ["return", "dist", "antennae", "thermal", "."],
-            "main/menu/test/head": ["return","move","heat",".","."],
+            "main/menu/test/head": ["return","move","heat","cry","."],
 
 
             "main/menu/test/moves1/forward": "test('F')",
@@ -498,6 +501,7 @@ menu = {
 
             "main/menu/test/head/move": "testHeadMovements()",
             "main/menu/test/head/heat": "testHotspot()",
+            "main/menu/test/head/cry": "testCry()",
 
             "main/menu/config":["return", "freset", "update", ".", "."],
 
@@ -516,7 +520,7 @@ except Exception:
 print("Mode",mode)
 
 robot = Robot(eval(mode+"()"), menu)
-#robot.animal.start()
+robot.animal.start()
 robot.runMenu("main")
 
 
