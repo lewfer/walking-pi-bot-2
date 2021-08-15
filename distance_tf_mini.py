@@ -16,6 +16,7 @@ class DistanceSensor:
 
         self.minDistance = 5    # min distance sensor can read
         self.maxDistance = 700  # max distance sensor can read
+        self.errorDistance = 1000  # distance to return if we get an error (a large value so robot does not take some avoiding action)
 
         self.log = log
 
@@ -61,7 +62,7 @@ class DistanceSensor:
                     buffer += recv
                 time.sleep(0.02)
                 if tries2>20:
-                    return self.maxDistance
+                    return self.errorDistance
 
             #self.p(buffer[:10])
             count = len(buffer)
@@ -127,8 +128,9 @@ class DistanceSensor:
                 pass
 
             if tries>20:
-                return self.maxDistance
+                return self.errorDistance
 
+        # Keep measurements within range
         return max(min(distance,self.maxDistance),self.minDistance)
 
 if __name__ == '__main__':

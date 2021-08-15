@@ -46,6 +46,7 @@ class RandomAnimal(Animal):
         # List of one-letter action codes and the associated actions
         self.actionFunction = {
             '*':'do_default()',
+            'K':'do_look()',
             'F':'do_forward()', 
             'B':'do_backward()',
             'L':'do_left()',
@@ -81,11 +82,11 @@ class RandomAnimal(Animal):
         Animal.setDefaultSettings(self)   
 
         # Weights for random movement action choices
-        #                                 ['.','S','B','L','R','U','P','E','A','+','-']
-        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  0,  1,  1,  20,  1]
+        #                                 ['.','S','B','L','R','U','P','E','A','+','-', 'K']
+        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  0,  1,  1,  20,  1, 80]
 
         # Min/max time for action to run
-        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[10,20],'+':[20,30],'-':[2,10]}
+        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[10,20],'+':[20,30],'-':[2,10],'K':[1,2]}
 
         # Number of seconds to wait before generating another random action
         self.settings['TICKPERIOD'] = 1
@@ -94,8 +95,8 @@ class RandomAnimal(Animal):
         self.settings['UNWINDALERTNESSINCREASE'] = 5
 
         # Head movement range in degrees
-        self.settings['HEADHIGHANGLE'] = 135
-        self.settings['HEADLOWANGLE'] = 45
+        self.settings['HEADHIGHANGLE'] = 180
+        self.settings['HEADLOWANGLE'] = 0
         self.settings['HEADMIDANGLE'] = 90
 
         # Change in head angle when tracking
@@ -183,6 +184,38 @@ class RandomAnimal(Animal):
             # We are not too close to anything
             self.log.info("\tNo issues seen, so move F")
             self.do_forward()
+
+    def do_look(self):
+        """Take a look around"""
+
+        self.log.info("Do look")
+
+        # Get ready for scan
+        self.stopCurrentAction()        # stop anything we are doing
+        self.head.pauseSensors()        # don't monitor sensors
+
+        # Do a scan (move head from side-to-side) looking for short distances
+        self.log.info("\tScanning")
+        movement, rearMovement = self.head.look()
+        #print("\tScan minpos={} maxpos={} movement={}".format(minPos, maxPos, movement))
+
+        # Check what we saw
+        if movement:
+            # We saw something move, so track it for a while
+            self.log.info("\tSaw a movement")
+            self.do_trackMovement()
+            self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
+
+        elif rearMovement:
+            self.log.info("\tSaw a rear movement")
+            self.do_turn()
+            self._setTimer(16, '*') #!!turn time
+
+        else:
+            # Carry on
+            self.log.info("\tNo issues seen, so move F")
+            self.do_forward()   
+
 
     def do_forward(self):
         '''Forwards is often called after an interrupt, so we also restart the sensors and clear any interrupt'''
@@ -432,7 +465,7 @@ class RandomAnimal(Animal):
             elif self._currentAction=="F" and self.age % 5 == 0: # every 5 seconds
                 # No timer, so allow another random, weighted choice
                 # . means no change to current action
-                actions = ['.','S','B','L','R','U','P','E','A','+','-']
+                actions = ['.','S','B','L','R','U','P','E','A','+','-','K']
                 weights = self.settings['RANDOMWEIGHTS']
                 choice = random.choices(actions, weights)[0]
                 self.log.info("random {}".format(choice))

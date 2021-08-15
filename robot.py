@@ -332,7 +332,11 @@ class Robot(Programmer):
         self.showOptions(options)
         self.showMessage("DistanceSensor", None)
         while True:
-            self.showMessage(None, str(self.animal.head.distanceSensor.readCm()))
+            dist = self.animal.head.distanceSensor.readCm()
+            if dist == self.animal.head.distanceSensor.errorDistance:
+                self.showMessage(None, "No reading")
+            else:    
+                self.showMessage(None, str(dist))
             optionName = self.getSelectedOption(options)
             if optionName=="return":
                 break   
@@ -353,10 +357,13 @@ class Robot(Programmer):
         self.showOptions(options)
         self.showMessage("ThermalSensor", None)
         while True:
-            matrix = self.animal.head.thermalSensor.readMatrix()
-            min,max,mean,rowmeans,colmeans,hotspot = self.animal.head.thermalSensor.summarise()
-            print(round(min,1),round(max,1),round(mean,1),hotspot)
-            msg = "{:.0f} {:.0f} {:.0f} {}".format(min,max,mean,hotspot[1])
+            if self.animal.head.thermalSensor is not None:
+                matrix = self.animal.head.thermalSensor.readMatrix()
+                min,max,mean,rowmeans,colmeans,hotspot = self.animal.head.thermalSensor.summarise()
+                print(round(min,1),round(max,1),round(mean,1),hotspot)
+                msg = "{:.0f} {:.0f} {:.0f} {}".format(min,max,mean,hotspot[1])
+            else:
+                msg = "No sensor"
             self.showMessage(None, msg)
             optionName = self.getSelectedOption(options)
             if optionName=="return":
@@ -509,7 +516,7 @@ except Exception:
 print("Mode",mode)
 
 robot = Robot(eval(mode+"()"), menu)
-robot.animal.start()
+#robot.animal.start()
 robot.runMenu("main")
 
 

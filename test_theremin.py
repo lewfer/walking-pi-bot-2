@@ -10,6 +10,6 @@ pwm = GPIO.PWM(voicePin, 1000)
 
 pwm.start(100)
 sleep(10)
-pwm.ChangeDutyCycle(0)
+pwm.ChangeDutyCycle(100)
 
 GPIO.cleanup()

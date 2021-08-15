@@ -68,7 +68,8 @@ class Leg():
 
         # Put the knee down, ready for the back push
         kneeDown = -KNEEMOVEMENT * self.direction
-        self.knee.moveRelativeToMid(kneeDown, t/2) 
+        #self.knee.moveRelativeToMid(kneeDown, t/2) 
+        self.kneeFullDown(t/2)
 
     def reachBackward(self, t):
         '''Make the leg do a reach backward movement, the first part of a walk'''
@@ -153,7 +154,7 @@ class Leg():
         
         # Move hip and knee together using threads, waiting for all threads to stop before continuing  
         hipOffset = 0                           # hip to neutral
-        kneeOffset = +10 * self.direction       # knee down a bit
+        kneeOffset = +30 * self.direction       # knee down a bit
         t1 = Thread(target=self.knee.moveRelativeToMid, kwargs={'deltaAngle':kneeOffset, 'secs':t})
         t1.name = "sit t1"
         t2 = Thread(target=self.hip.moveRelativeToMid, kwargs={'deltaAngle':0, 'secs':t}) 

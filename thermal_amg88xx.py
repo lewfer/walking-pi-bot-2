@@ -191,11 +191,11 @@ if __name__ == "__main__":
     while True:
         matrix = t.readMatrix()
         #t.print(matrix,1)
-        os.system('clear')
+        #os.system('clear')
 
         if mode=="1":
             minval,maxval,meanval,rowmeans,colmeans,hotspot = t.summarise()
-            print(minval,maxval,meanval,rowmeans,colmeans,hotspot)
+            print(minval,maxval,meanval,"\n",rowmeans,"\n",colmeans,"\n",hotspot)
 
         #diff = t.delta()
         #print("diff")
@@ -203,7 +203,7 @@ if __name__ == "__main__":
 
         if mode=="2":
             sumAbs, rowSumAbs, colSumAbs, hotspot = t.movement()
-            t.printCols(colSumAbs)
+            print(colSumAbs)
             if (colSumAbs[hotspot[1]]>10):
                 print("Movement detected")
 

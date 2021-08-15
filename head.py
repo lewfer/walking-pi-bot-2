@@ -16,6 +16,7 @@ from gpiozero import MotionSensor
 from helpers import remap
 from threading import Thread
 from time import sleep
+import random
 
 class Head:
 
@@ -37,7 +38,11 @@ class Head:
 
         # Set up the thermal sensor (uses I2C to the RPi)
         # The thermal sensor reads a 8x8 matrix (64 readings)
-        self.thermalSensor = ThermalSensor()
+        try:
+            self.thermalSensor = ThermalSensor()
+        except Exception as e:
+            self.thermalSensor = None
+            log.info("ERROR: Failed to start thermal sensor: " + str(e))
         self.thermalSensorThread = None         # thread on which to run continuous monitoring
         self._runningThermalSensor = False      # flag to indicate if continuous monitoring is running
         self._pauseThermalSensor = False        # flag to indicate if continuous monitoring is paused
@@ -49,8 +54,8 @@ class Head:
 
         # Settings - can be overridden by the body
         self.joint.midAngle = 90                # midpoint angle for servo (facing forwards)
-        self.joint.highAngle = 135              # high angle for servo (rightmost angle)
-        self.joint.lowAngle = 45                # lowest angle for servo (leftmost angle)
+        self.joint.highAngle = 160              # high angle for servo (rightmost angle)
+        self.joint.lowAngle = 20                # lowest angle for servo (leftmost angle)
         self.trackDelta = 10                    # change in angle each iteration when tracking movement
         self.shortDistance = 20                 # distance in cm to obstacle below which triggers a short-distance interrupt
         self.longDistance = 1000                # distance in cm to obstacle above which triggers a long-distance interrupt
@@ -68,6 +73,9 @@ class Head:
     def trackHotspot(self):
         """Adjust position of the head towards hot spot detected.
         Returns hottest column, or None if no hotspot detected"""
+
+        if self.thermalSensor is None:
+            return None
 
         # Read the thermal sensor
         matrix = self.thermalSensor.readMatrix()
@@ -92,6 +100,9 @@ class Head:
         """Adjust position of the head towards any movement detected.
         Returns True if movement detected, False otherwise"""
 
+        if self.thermalSensor is None:
+            return False
+
         # Read the thermal sensor
         matrix = self.thermalSensor.readMatrix()
         values = self.thermalSensor.movement()
@@ -114,26 +125,34 @@ class Head:
              # If movement detected move head by amount depending on which col saw the movement
             offset = 1    # offset from centre to detect (centre detection won't cause movement)
             if hotcol>=4+offset:
+            #if hotcol>3:
                 # Movement detected to the right
                 matrix = self.thermalSensor.readMatrix() # read again to nullify movement
-                angle = (hotcol-4)*self.trackDelta
-                self.joint.moveRelativeToCurrent(-angle, 0.5)
+                #angle = (hotcol-3)*self.trackDelta
+                angle = self.trackDelta
+                self.joint.moveRelativeToCurrent(-angle, 0.1)
 
             elif hotcol <=3-offset:
+            #elif hotcol <4:
                 # Movement detected to the left
                 matrix = self.thermalSensor.readMatrix() # read again to nullify movement
-                angle = hotcol*self.trackDelta
-                self.joint.moveRelativeToCurrent(angle, 0.5)
+                #angle = (hotcol+1)*self.trackDelta
+                angle = self.trackDelta
+                self.joint.moveRelativeToCurrent(angle, 0.1)
             
             return True
         else:
             # No movement
+            print("No movement")
             return False
 
 
     def detectMovement(self):
         """Take a reading from the thermal sensor.  Checks against previous reading to see if there was movement.
            Returns True if we detected movement"""
+
+        if self.thermalSensor is None:
+            return False
 
         matrix = self.thermalSensor.readMatrix()
         #min,max,mean,rowmeans,colmeans,hotspot = self.thermalSensor.summarise()
@@ -163,6 +182,29 @@ class Head:
         """Move head to a position from -100 (left) to +100 (right)"""
         newAngle = remap(position,-100,100,self.joint.highAngle,self.joint.lowAngle)
         self.joint.moveTo(newAngle, t)
+
+    def look(self):
+        """Look around, moving head left to right"""
+        numMovements = random.randint(3,8)
+        base = -100
+        for i in range(numMovements):
+            self.move(random.randint(base, base+100), t=0)
+            sleep(0.25) # try sleeping to avoid thermal camera detecting movement immediately
+            # Check for thermal movement
+            if self.thermalSensor is not None:
+                self.thermalSensor.readMatrix()  # read
+                #sleep(self.movementWaitSeconds)     # wait a bit   
+                rearMovement = self.tail.wait_for_motion(timeout=self.movementWaitSeconds)
+                movement = self.detectMovement() # read again and look for deltas
+            else:
+                movement = False       
+            if movement or rearMovement:
+                return movement, rearMovement
+            base = -100 if base==0 else 0
+        
+        # Nothing seen front or back
+        return False, False           
+
 
     def scan(self):
         """Scan left to right, reading distances and checking for movement.  """
@@ -208,10 +250,13 @@ class Head:
         self.move(0, t=2)
 
         # Check for thermal movement
-        self.thermalSensor.readMatrix()  # read
-        #sleep(self.movementWaitSeconds)     # wait a bit   
-        rearMovement = self.tail.wait_for_motion(timeout=self.movementWaitSeconds)
-        movement = self.detectMovement() # read again and look for deltas
+        if self.thermalSensor is not None:
+            self.thermalSensor.readMatrix()  # read
+            #sleep(self.movementWaitSeconds)     # wait a bit   
+            rearMovement = self.tail.wait_for_motion(timeout=self.movementWaitSeconds)
+            movement = self.detectMovement() # read again and look for deltas
+        else:
+            movement = False
 
         # Return all the results
         return minPos, minDist, maxPos, maxDist, minLeftDist, minRightDist, maxLeftDist, maxRightDist, movement, rearMovement
@@ -330,11 +375,18 @@ class Head:
 
     def startThermalSensor(self):
         """Start thermal sensor running on a thread"""
+        if self.thermalSensor is None:
+            return None
+
         self.thermalSensorThread = Thread(target=self.runThermalSensor)
         self.thermalSensorThread.start() 
 
     def runThermalSensor(self):
         """Thread which constantly reads from the thermal sensor and raises interrupts for significant events"""
+
+        if self.thermalSensor is None:
+            return None
+
         self._runningThermalSensor = True
         while self._runningThermalSensor:
             if not self._pauseThermalSensor:
