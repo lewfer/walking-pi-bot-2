@@ -52,7 +52,7 @@ class Animal():
 
         self.voicePin = 16
         GPIO.setup(self.voicePin, GPIO.OUT)
-        self.pwm = GPIO.PWM(self.voicePin, 1000)
+        #self.pwm = GPIO.PWM(self.voicePin, 1000)
 
         # Robot health (not used at the moment)
         # Can use these to determine behaviour, e.g. slowing down as energy drops
@@ -77,13 +77,19 @@ class Animal():
         # Caller can register a callback to receive messages (for display purposes)
         self.messageCallback = None
 
+        self.stopCry()
+
         self.log.info("Created Animal")
 
     def cry(self):
-        self.pwm.start(100)
+        print("CRY")
+        #self.pwm.start(100)
+        GPIO.output(self.voicePin, GPIO.HIGH)
 
     def stopCry(self):
-        self.pwm.ChangeDutyCycle(0)
+        print("STOP CRY")
+        #self.pwm.ChangeDutyCycle(0)
+        GPIO.output(self.voicePin, GPIO.LOW)
 
     # Construction
     # ---------------------------------------------------------------------------------------------
@@ -132,8 +138,9 @@ class Animal():
         # Random wait time between certain movements, in tenths of a second
         self.settings['RANDOMWAIT'] = 2    
 
-        # Number of time steps taken per angular degree.  Adjust for smoother/quicker movement.  Small value means smoother, but possibly slower
-        self.settings['STEPSPERDEGREE'] = 1
+        # Number of time steps taken per angular degree.  Adjust for smoother/quicker movement.  Small value means quicker and less smooth
+        # Try 2, 1, 0.5, 0.25
+        self.settings['STEPSPERDEGREE'] = 0.25
 
     def loadSettings(self):
         '''Load the settings file, which contains the calibrated settings for each joint'''
@@ -239,8 +246,11 @@ class Animal():
 
     # Threading
     # ---------------------------------------------------------------------------------------------
-    def _runOnThread(self, legId, func, params):
+    def _runOnThread(self, legId, func, params, waitMult=0):
         """Run the function func on the leg identified by legId with the given params.  Wait for any existing thread to finish first"""
+
+        if waitMult>0:
+            self._waitRandom(waitMult) 
 
         # Get the thread associated with the leg
         thread = self._threads[legId]
@@ -319,13 +329,164 @@ class Animal():
 
 
 
-    # Actions
+    # Actions Helpers
     # ---------------------------------------------------------------------------------------------
 
-    def _waitRandom(self):
+    def _waitRandom(self, mult=1):
         '''Wait for a random time (in tenths of a second)'''
 
-        sleep(random.randint(0,self.settings['RANDOMWAIT'])/10.0) 
+        sleep(random.randint(0,self.settings['RANDOMWAIT']*mult)/10.0) 
+
+    def _reachForwardPair(self, pair, t):
+        # Move limbs forward, left then right or the other way
+        left = "L"+str(pair)
+        right = "R"+str(pair)
+        if random.random()>0.5:
+            self._reachForwardLeg(left, t)
+            self._reachForwardLeg(right, t)
+        else:
+            self._reachForwardLeg(right, t)
+            self._reachForwardLeg(left, t)
+
+    def _reachForwardPairTogether(self, pair, t):
+        # Move  limbs forward, both together
+        left = "L"+str(pair)
+        right = "R"+str(pair)
+        if random.random()>0.5:
+            self._runOnThread(left, 'reachForward', {'t':t}, 3)
+            self._runOnThread(right, 'reachForward', {'t':t}, 3)
+        else:
+            self._runOnThread(right, 'reachForward', {'t':t}, 3)
+            self._runOnThread(left, 'reachForward', {'t':t}, 3)
+
+        self._joinThreads([left, right])
+                
+    def _reachForwardLeg(self, leg, t):
+        self._runOnThread(leg, 'reachForward', {'t':t}, 3)
+        self._joinThreads([leg])     
+
+    def _reachForwardLeft(self, t):
+        legs = ['L0']
+        self._runOnThread('L0', 'reachForward', {'t':t}, 3)
+        if self.numLegs > 2:
+            self._runOnThread('L1', 'reachForward', {'t':t}, 3)
+            legs += ['L1']
+        if self.numLegs > 4:
+            self._runOnThread('L2', 'reachForward', {'t':t}, 3)                
+            legs += ['L2']
+        self._joinThreads(legs)
+
+    def _reachForwardRight(self, t):
+        legs = ['R0']
+        self._runOnThread('R0', 'reachForward', {'t':t}, 3)
+        if self.numLegs > 2:
+            self._runOnThread('R1', 'reachForward', {'t':t}, 3)
+            legs += ['R1']
+        if self.numLegs > 4:
+            self._runOnThread('R2', 'reachForward', {'t':t}, 3)                
+            legs += ['R2']
+        self._joinThreads(legs)   
+
+    def _reachBackwardLeft(self, t):
+        legs = ['L0']
+        self._runOnThread('L0', 'reachBackward', {'t':t}, 3)
+        if self.numLegs > 2:
+            self._runOnThread('L1', 'reachBackward', {'t':t}, 3)
+            legs += ['L1']
+        if self.numLegs > 4:
+            self._runOnThread('L2', 'reachBackward', {'t':t}, 3)                
+            legs += ['L2']
+        self._joinThreads(legs)
+
+    def _reachBackwardRight(self, t):
+        legs = ['R0']
+        self._runOnThread('R0', 'reachBackward', {'t':t}, 3)
+        if self.numLegs > 2:
+            self._runOnThread('R1', 'reachBackward', {'t':t}, 3)
+            legs += ['R1']
+        if self.numLegs > 4:
+            self._runOnThread('R2', 'reachBackward', {'t':t}, 3)                
+            legs += ['R2']
+        self._joinThreads(legs)          
+
+    def _pushBackAll(self, t):
+        # Move front limbs 
+        self._runOnThread('L0', 'pushBackward', {'t':t})
+        self._runOnThread('R0', 'pushBackward', {'t':t})
+        legs = ['L0','R0']
+
+        if self.numLegs > 2:
+            # Move middle limbs 
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('L1', 'pushBackward', {'t':t})
+            self._runOnThread('R1', 'pushBackward', {'t':t})
+            legs += ['L1','R1']
+
+        if self.numLegs > 4:
+            # Move rear limbs
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('L2', 'pushBackward', {'t':t})
+            self._runOnThread('R2', 'pushBackward', {'t':t})
+            legs += ['L2','R2']
+
+        # Wait for all legs to stop
+        self._joinThreads(legs)
+
+    def _pushBackLeft(self, t):
+        legs = ['L0']
+        self._runOnThread('L0', 'pushBackward', {'t':t})
+        if self.numLegs > 2:
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('L1', 'pushBackward', {'t':t})
+            legs += ['L1']
+        if self.numLegs > 4:
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('L2', 'pushBackward', {'t':t})
+            legs += ['L2']
+        self._joinThreads(legs)   
+
+    def _pushBackRight(self,t):
+        legs = ['R0']
+        self._runOnThread('R0', 'pushBackward', {'t':t})
+        if self.numLegs > 2:
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('R1', 'pushBackward', {'t':t})
+            legs += ['R1']
+        if self.numLegs > 4:
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('R2', 'pushBackward', {'t':t})
+            legs += ['R2']
+        self._joinThreads(legs)             
+
+    def _pushForwardLeft(self, t):
+        legs = ['L0']
+        self._runOnThread('L0', 'pushForward', {'t':t})
+        if self.numLegs > 2:
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('L1', 'pushForward', {'t':t})
+            legs += ['L1']
+        if self.numLegs > 4:
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('L2', 'pushForward', {'t':t})
+            legs += ['L2']
+        self._joinThreads(legs)   
+
+    def _pushForwardRight(self,t):
+        legs = ['R0']
+        self._runOnThread('R0', 'pushForward', {'t':t})
+        if self.numLegs > 2:
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('R1', 'pushForward', {'t':t})
+            legs += ['R1']
+        if self.numLegs > 4:
+            sleep(self.settings['PUSHDELAY'])
+            self._runOnThread('R2', 'pushForward', {'t':t})
+            legs += ['R2']
+        self._joinThreads(legs)             
+
+
+    # Actions 
+    # ---------------------------------------------------------------------------------------------
 
     def _run(self):
         '''Move forward at speed'''
@@ -338,68 +499,29 @@ class Animal():
         self._forward(speed=0.5)        
 
     def _forward(self, speed=1):
+        '''Move forward in a random way'''
+        actions = ['self._shunt(speed)','self._swimBreast(speed)', 'self._swimButterfly(speed)', 'self._swimFrontCrawl(speed)']
+        choice = random.choice(actions)
+        self.log.info("Forward: " + choice)
+        exec(choice)
+
+    def _shunt(self, speed=1):
         '''Move forward'''
 
         self._stopped = False
 
         while True:
             # Move limbs forwards, one at a time
-            # ----------------------------------
-            
             t = self.settings['REACHTIME'] / speed
-
-            # Move front limbs 
-            self._runOnThread('L0', 'reachForward', {'t':t})
-            self._joinThreads(['L0'])
-            self._waitRandom() 
-            self._runOnThread('R0', 'reachForward', {'t':t})
-            self._joinThreads(['R0'])
-            self._waitRandom() 
-
+            self._reachForwardPair(0, t)
             if self.numLegs > 2:
-                # Move middle limbs 
-                self._runOnThread('L1', 'reachForward', {'t':t})
-                self._waitRandom() 
-                self._joinThreads(['L1'])
-                self._runOnThread('R1', 'reachForward', {'t':t})
-                self._joinThreads(['R1'])
-                self._waitRandom() 
-
+                self._reachForwardPair(1, t)
             if self.numLegs > 4:
-                # Move rear limbs
-                self._runOnThread('L2', 'reachForward', {'t':t})
-                self._joinThreads(['L2'])
-                self._waitRandom() 
-                self._runOnThread('R2', 'reachForward', {'t':t})
-                self._joinThreads(['R2'])
-                self._waitRandom()             
+                self._reachForwardPair(2, t)
 
             # Move limbs backwards together
-            # -----------------------------
-
             t = self.settings['PUSHTIME'] / speed
-
-            # Move front limbs 
-            self._runOnThread('L0', 'pushBackward', {'t':t})
-            self._runOnThread('R0', 'pushBackward', {'t':t})
-            legs = ['L0','R0']
-
-            if self.numLegs > 2:
-                # Move middle limbs 
-                sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L1', 'pushBackward', {'t':t})
-                self._runOnThread('R1', 'pushBackward', {'t':t})
-                legs += ['L1','R1']
-
-            if self.numLegs > 4:
-                # Move rear limbs
-                sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L2', 'pushBackward', {'t':t})
-                self._runOnThread('R2', 'pushBackward', {'t':t})
-                legs += ['L2','R2']
-
-            # Wait for all legs to stop
-            self._joinThreads(legs)
+            self._pushBackAll(t)
 
             # If request was made to end walk, break out of loop
             if self._stopped:
@@ -407,6 +529,87 @@ class Animal():
 
         self._stopMovements()
 
+    def _swimBreast(self, speed=1):
+        '''Move forward in swim motion (one side then other).  Breast stroke, so push back together'''
+
+        self._stopped = False
+
+        while True:
+            # Move limbs forwards, one at a time
+            t = self.settings['REACHTIME'] / speed
+            if random.random()>0.5:
+                self._reachForwardLeft(t)
+                self._reachForwardRight(t)
+            else:
+                self._reachForwardRight(t)
+                self._reachForwardLeft(t)
+
+            # Move limbs backwards together
+            t = self.settings['PUSHTIME'] / speed
+            self._pushBackAll(t)
+
+            # If request was made to end walk, break out of loop
+            if self._stopped:
+                break   
+
+        self._stopMovements()        
+
+    def _swimButterfly(self, speed=1):
+        '''Move forward in swim motion (one side then other).  Breast stroke, so push back together'''
+
+        self._stopped = False
+
+        while True:
+            # Move limbs forwards, one at a time
+            t = self.settings['REACHTIME'] / speed
+            self._reachForwardPairTogether(0, t)
+            if self.numLegs > 2:
+                self._reachForwardPairTogether(1, t)
+            if self.numLegs > 4:
+                self._reachForwardPairTogether(2, t)
+
+
+            # Move limbs backwards together
+            t = self.settings['PUSHTIME'] / speed
+            self._pushBackAll(t)
+
+            # If request was made to end walk, break out of loop
+            if self._stopped:
+                break   
+
+        self._stopMovements()        
+
+    def _swimFrontCrawl(self, speed=1):
+        '''Move forward in swim motion (one side then other).  Front crawl, so push back on each side.'''
+
+        self._stopped = False
+
+        while True:
+            # Move limbs forwards, one at a time
+            t = self.settings['REACHTIME'] / speed
+            if random.random()>0.5:
+                self._reachForwardLeft(t)
+                self._reachForwardRight(t)
+            else:
+                self._reachForwardRight(t)
+                self._reachForwardLeft(t)
+
+            # Move limbs backwards together
+            t = self.settings['PUSHTIME'] / speed
+            if random.random()>0.5:
+                self._pushBackLeft(t)
+                self._waitRandom(3) 
+                self._pushBackRight(t)
+            else:
+                self._pushBackRight(t)
+                self._waitRandom(3) 
+                self._pushBackLeft(t)
+
+            # If request was made to end walk, break out of loop
+            if self._stopped:
+                break   
+
+        self._stopMovements()   
 
     def _backward(self):
         '''Move backward'''
@@ -487,60 +690,28 @@ class Animal():
         t2 = self.settings['PUSHTIME']
 
         # Move left legs into position
-        self._runOnThread('L0', 'reachBackward', {'t':t1})
-        self._joinThreads(['L0'])
-        self._waitRandom() 
-        if self.numLegs > 2:
-            self._runOnThread('L1', 'kneeFullUp', {'t':t1})
-            self._joinThreads(['L1'])
-            self._waitRandom() 
         if self.numLegs > 4:
-            self._runOnThread('L2', 'kneeFullUp', {'t':t1})
-            self._joinThreads(['L2'])
+            self._runOnThread('L0', 'kneeFullUp', {'t':t1})
+            self._runOnThread('L1', 'kneeFullUp', {'t':t1})
+            self._runOnThread('L2', 'reachBackward', {'t':t1})
+            self._joinThreads(['L0','L1','L2'])
             self._waitRandom() 
+        elif self.numLegs > 2:
+            self._runOnThread('L0', 'kneeFullUp', {'t':t1})
+            self._runOnThread('L1', 'reachBackward', {'t':t1})
+            self._joinThreads(['L0','L1'])
+            self._waitRandom()    
+        else:
+            self._runOnThread('L0', 'reachBackward', {'t':t1})
+            self._joinThreads(['L0'])
+            self._waitRandom()          
 
         while True:
-            # Move limbs backwards, one at a time
-            # ----------------------------------
-                        
-            # Move front right leg
-            self._runOnThread('R0', 'reachBackward', {'t':t1})
-            self._joinThreads(['R0'])
-            self._waitRandom() 
+            # Move limbs backwards
+            self._reachBackwardRight(t2)
 
-            if self.numLegs > 2:
-                # Move middle right leg
-                self._runOnThread('R1', 'reachBackward', {'t':t1})
-                self._joinThreads(['R1'])
-                self._waitRandom() 
-
-            if self.numLegs > 4:
-                # Move rear right leg
-                self._runOnThread('R2', 'reachBackward', {'t':t1})
-                self._joinThreads(['R2'])
-                self._waitRandom() 
-
-            # Move limbs forwards together
-            # -----------------------------
-
-            # Move front right leg
-            self._runOnThread('R0', 'pushForward', {'t':t2})
-            legs = ['L0','R0']
-
-            if self.numLegs > 2:
-                # Move middle right leg
-                sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('R1', 'pushForward', {'t':t2})
-                legs += ['L1','R1']
-
-            if self.numLegs > 4:
-                # Move rear right leg
-                sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('R2', 'pushForward', {'t':t2})
-                legs += ['L2','R2']
-
-            # Wait for all legs to stop
-            self._joinThreads(legs)
+            # Move limbs forwards 
+            self._pushForwardRight(t2)
 
             # If request was made to end walk, break out of loop
             if self._stopped:
@@ -559,62 +730,28 @@ class Animal():
         t2 = self.settings['PUSHTIME']
 
         # Move right legs into position
-        self._runOnThread('R0', 'reachBackward', {'t':t1})
-        self._joinThreads(['R0'])
-        self._waitRandom() 
-        if self.numLegs > 2:
-            self._runOnThread('R1', 'reachBackward', {'t':t1})
-            self._joinThreads(['R1'])
-            self._waitRandom() 
         if self.numLegs > 4:
+            self._runOnThread('R0', 'kneeFullUp', {'t':t1})
+            self._runOnThread('R1', 'kneeFullUp', {'t':t1})
             self._runOnThread('R2', 'reachBackward', {'t':t1})
-            self._joinThreads(['R2'])
+            self._joinThreads(['R0','R1','R2'])
             self._waitRandom() 
+        elif self.numLegs > 2:
+            self._runOnThread('R0', 'kneeFullUp', {'t':t1})
+            self._runOnThread('R1', 'reachBackward', {'t':t1})
+            self._joinThreads(['R0','R1'])
+            self._waitRandom()    
+        else:
+            self._runOnThread('R0', 'reachBackward', {'t':t1})
+            self._joinThreads(['R0'])
+            self._waitRandom()                       
 
         while True:
-            # Move limbs backwards, one at a time
-            # ----------------------------------
-                        
+            # Move limbs backwards
+            self._reachBackwardLeft(t2)
 
-            # Move front left leg 
-            self._runOnThread('L0', 'reachBackward', {'t':t1})
-            self._joinThreads(['L0'])  
-            self._waitRandom()           
-
-            if self.numLegs > 2:
-                # Move middle left leg
-                self._runOnThread('L1', 'reachBackward', {'t':t1})
-                self._joinThreads(['L1'])
-                self._waitRandom() 
-
-            if self.numLegs > 4:
-                # Move rear left leg
-                self._runOnThread('L2', 'reachBackward', {'t':t1})
-                self._joinThreads(['L2'])
-                self._waitRandom() 
-
-
-            # Move limbs forwards together
-            # -----------------------------
-
-            # Move left front leg
-            self._runOnThread('L0', 'pushForward', {'t':t2})
-            legs = ['L0','R0']
-
-            if self.numLegs > 2:
-                # Move middle left leg
-                sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L1', 'pushForward', {'t':t2})
-                legs += ['L1','R1']
-
-            if self.numLegs > 4:
-                # Move rear left leg
-                sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L2', 'pushForward', {'t':t2})
-                legs += ['L2','R2']
-
-            # Wait for all legs to stop
-            self._joinThreads(legs)
+            # Move limbs forwards
+            self._pushForwardLeft(t2)
 
             # If request was made to end walk, break out of loop
             if self._stopped:
@@ -645,19 +782,18 @@ class Animal():
 
             if self.numLegs > 2:
                 # Move middle limbs
-                self._runOnThread('L1', 'reachBackward', {'t':t})
+                self._runOnThread('L1', 'reachForward', {'t':t})
                 self._waitRandom() 
-                self._runOnThread('R1', 'reachForward', {'t':t})
+                self._runOnThread('R1', 'reachBackward', {'t':t})
                 self._joinThreads(['L1','R1'])
                 self._waitRandom() 
 
             if self.numLegs > 4:
                 # Move rear limbs
-                self._runOnThread('L2', 'reachBackward', {'t':t})
-                self._joinThreads(['L2'])
+                self._runOnThread('L2', 'reachForward', {'t':t})
                 self._waitRandom() 
-                self._runOnThread('R2', 'reachForward', {'t':t})
-                self._joinThreads(['R2'])
+                self._runOnThread('R2', 'reachBackward', {'t':t})
+                self._joinThreads(['L2','R2'])
                 self._waitRandom() 
 
 
@@ -674,16 +810,16 @@ class Animal():
             if self.numLegs > 2:
                 # Move middle limbs
                 sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L1', 'pushForward', {'t':t})
-                self._runOnThread('R1', 'pushBackward', {'t':t})
-                legs = ['L1','R1']
+                self._runOnThread('L1', 'pushBackward', {'t':t})
+                self._runOnThread('R1', 'pushForward', {'t':t})
+                legs += ['L1','R1']
 
             if self.numLegs > 4:
                 # Move rear limbs
                 sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L2', 'pushForward', {'t':t})
-                self._runOnThread('R2', 'pushBackward', {'t':t})
-                legs = ['L2','R2']
+                self._runOnThread('L2', 'pushBackward', {'t':t})
+                self._runOnThread('R2', 'pushForward', {'t':t})
+                legs += ['L2','R2']
 
             # Wait for all legs to stop
             self._joinThreads(legs)        
@@ -716,19 +852,18 @@ class Animal():
 
             if self.numLegs > 2:
                 # Move middle limbs
-                self._runOnThread('L1', 'reachForward', {'t':t})
+                self._runOnThread('L1', 'reachBackward', {'t':t})
                 self._waitRandom() 
-                self._runOnThread('R1', 'reachBackward', {'t':t})
+                self._runOnThread('R1', 'reachForward', {'t':t})
                 self._joinThreads(['L1','R1'])
                 self._waitRandom() 
 
             if self.numLegs > 4:
                 # Move rear limbs
-                self._runOnThread('L2', 'reachForward', {'t':t})
-                self._joinThreads(['L2'])
+                self._runOnThread('L2', 'reachBackward', {'t':t})
                 self._waitRandom() 
-                self._runOnThread('R2', 'reachBackward', {'t':t})
-                self._joinThreads(['R2'])
+                self._runOnThread('R2', 'reachForward', {'t':t})
+                self._joinThreads(['L2','R2'])
                 self._waitRandom() 
 
             t = self.settings['PUSHTIME']
@@ -743,15 +878,15 @@ class Animal():
 
             if self.numLegs > 2:
                 sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L1', 'pushBackward', {'t':t})
-                self._runOnThread('R1', 'pushForward', {'t':t})
-                legs = ['L1','R1']
+                self._runOnThread('L1', 'pushForward', {'t':t})
+                self._runOnThread('R1', 'pushBackward', {'t':t})
+                legs += ['L1','R1']
 
             if self.numLegs > 4:
                 sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L2', 'pushBackward', {'t':t})
-                self._runOnThread('R2', 'pushForward', {'t':t})
-                legs = ['L2','R2']
+                self._runOnThread('L2', 'pushForward', {'t':t})
+                self._runOnThread('R2', 'pushBackward', {'t':t})
+                legs += ['L2','R2']
 
             # Wait for all legs to stop
             self._joinThreads(legs)
@@ -879,13 +1014,12 @@ class Animal():
             right = 'R0'
             threads = ['L0','R0','L1','R1']
             for i in range(3):
-                print("mid")
                 self._runOnThread('L0', 'kneeFullUp', {'t':t})
                 self._runOnThread('R0', 'kneeFullUp', {'t':t})   
                 self._runOnThread('L1', 'kneeFullDown', {'t':t})
                 self._runOnThread('R1', 'kneeFullDown', {'t':t})     
                 self._joinThreads(threads)    
-                print("alert")    
+                
                 self._runOnThread('L0', 'kneeFullDown', {'t':t})
                 self._runOnThread('R0', 'kneeFullDown', {'t':t})       
                 self._runOnThread('L1', 'kneeFullUp', {'t':t})
@@ -897,11 +1031,10 @@ class Animal():
             right = 'R0'
             threads = ['L0','R0','L1','R1']
             for i in range(3):
-                print("mid")
                 self._runOnThread('L0', 'kneeFullUp', {'t':t})
                 self._runOnThread('R0', 'kneeFullUp', {'t':t})      
                 self._joinThreads(threads)    
-                print("alert")    
+                 
                 self._runOnThread('L0', 'kneeFullDown', {'t':t})
                 self._runOnThread('R0', 'kneeFullDown', {'t':t})              
                 self._joinThreads(threads)  
@@ -987,18 +1120,18 @@ class Animal():
 
             if self.numLegs > 2:
                 # Move middle limbs
-                self._runOnThread('L1', 'reachForward', {'t':t})
+                self._runOnThread('L1', 'reachBackward', {'t':t})
                 self._waitRandom() 
-                self._runOnThread('R1', 'reachBackward', {'t':t})
+                self._runOnThread('R1', 'reachForward', {'t':t})
                 self._joinThreads(['L1','R1'])
                 self._waitRandom() 
 
             if self.numLegs > 4:
                 # Move rear limbs
-                self._runOnThread('L2', 'reachForward', {'t':t})
+                self._runOnThread('L2', 'reachBackward', {'t':t})
                 self._joinThreads(['L2'])
                 self._waitRandom() 
-                self._runOnThread('R2', 'reachBackward', {'t':t})
+                self._runOnThread('R2', 'reachForward', {'t':t})
                 self._joinThreads(['R2'])
                 self._waitRandom() 
 
@@ -1014,14 +1147,14 @@ class Animal():
 
             if self.numLegs > 2:
                 sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L1', 'pushBackward', {'t':t})
-                self._runOnThread('R1', 'pushForward', {'t':t})
+                self._runOnThread('L1', 'pushForward', {'t':t})
+                self._runOnThread('R1', 'pushBackward', {'t':t})
                 legs = ['L1','R1']
 
             if self.numLegs > 4:
                 sleep(self.settings['PUSHDELAY'])
-                self._runOnThread('L2', 'pushBackward', {'t':t})
-                self._runOnThread('R2', 'pushForward', {'t':t})
+                self._runOnThread('L2', 'pushForward', {'t':t})
+                self._runOnThread('R2', 'pushBackward', {'t':t})
                 legs = ['L2','R2']
 
             # Wait for all legs to stop
@@ -1141,6 +1274,8 @@ class Animal():
         # Put in alert state
         self._scare()
 
+        self.stopCry()
+
         #self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
 
         noMovementCount = 0
@@ -1163,9 +1298,8 @@ class Animal():
                 self.log.info("Stopped track movement")
                 break         
 
-            sleep(0.2)
+            sleep(0.1)
         
-        self.stopCry()
 
     def _trackHotspot(self):
         # Put in alert state
@@ -1231,7 +1365,7 @@ if __name__ == "__main__":
     animal.addPairOfLegs(Leg(Joint(0), Joint(1), 1), Leg(Joint(2), Joint(3), -1))
     
     # With 4 legs           
-    animal.addPairOfLegs(Leg(Joint(4), Joint(5), 1), Leg(Joint(6), Joint(7), -1))
+    #animal.addPairOfLegs(Leg(Joint(4), Joint(5), 1), Leg(Joint(6), Joint(7), -1))
 
     # Load settings from json file
     animal.loadSettings()
@@ -1241,10 +1375,8 @@ if __name__ == "__main__":
 
     t = 10
 
-    animal.runAction(animal._trackMovement)
-    sleep(10)
 
-"""
+
     # Run through all the actions
 
     animal.runAction(animal._forward)
@@ -1259,6 +1391,13 @@ if __name__ == "__main__":
     animal.runAction(animal._left)
     sleep(t)
 
+    animal.runAction(animal._backRight)
+    sleep(t)
+
+    animal.runAction(animal._backLeft)
+    sleep(t)
+
+    """ 
     animal.runAction(animal._point)
     sleep(t)
 
@@ -1286,17 +1425,12 @@ if __name__ == "__main__":
     animal.runAction(animal._hipsforward)
     sleep(t)   
 
-    animal.runAction(animal._backRight)
-    sleep(t)
-
-    animal.runAction(animal._backLeft)
-    sleep(t)
-
     animal.runAction(animal._detectMovement)
     sleep(10)   
 
     animal.runAction(animal._trackMovement)
     sleep(30)   
+    """
 
     animal.stopCurrentAction()
-  """
+

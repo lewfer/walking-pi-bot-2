@@ -83,10 +83,10 @@ class RandomAnimal(Animal):
 
         # Weights for random movement action choices
         #                                 ['.','S','B','L','R','U','P','E','A','+','-', 'K']
-        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  0,  1,  1,  20,  1, 80]
+        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  0,  1,  1,  10,  1, 40]
 
         # Min/max time for action to run
-        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[10,20],'+':[20,30],'-':[2,10],'K':[1,2]}
+        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[20,30],'+':[20,30],'-':[2,10],'K':[1,2]}
 
         # Number of seconds to wait before generating another random action
         self.settings['TICKPERIOD'] = 1
@@ -516,11 +516,11 @@ class RandomAnimal(Animal):
             else:
                 timerMsg = "{}_in_{}s (of {}s)".format(self._timerAction, self._timerDelay-(self.age-self._timerAgeStart), self._timerDelay)
 
-            # alertness={} energy={}  human={} self.alertness, self.energy, self.lastHumanDetectAge
-            self.log.info("\t{} age={} timernext={} threadcount={} interrupt={} dist={} temp={},{}".format(
+            # alertness={} energy={}  threads={} human={} self.alertness, self.energy, activeCount(), self.lastHumanDetectAge
+            self.log.info("\t{} age={} next={} int={} dist={} temp={},{}".format(
                 self._currentAction, self.age, 
                 timerMsg,
-                activeCount(), self._interruptId, 
+                self._interruptId, 
                 self.head.lastDistance, self.head.lastMinTemperature,self.head.lastMaxTemperature,
                 ))
 

@@ -117,29 +117,29 @@ class Head:
         # Get the column which has most movement
         hotcol = hotspot[1]
 
+        detectedSignificantMovement = colmovements[hotcol]>self.colMovementThreshold
+        self._printCols(colmovements, indent="\tTrack (" + str(detectedSignificantMovement) + ")")
+
+        # If movement detected move head by amount depending on which col saw the movement
+        offset = 1    # offset from centre to detect (centre detection won't cause movement)
+        if hotcol>=4+offset:
+        #if hotcol>3:
+            # Movement detected to the right
+            #matrix = self.thermalSensor.readMatrix() # read again to nullify movement
+            angle = (hotcol-3)*self.trackDelta
+            #angle = self.trackDelta
+            self.joint.moveRelativeToCurrent(-angle, 0.1)
+
+        elif hotcol <=3-offset:
+        #elif hotcol <4:
+            # Movement detected to the left
+            #matrix = self.thermalSensor.readMatrix() # read again to nullify movement
+            angle = (hotcol+1)*self.trackDelta
+            #angle = self.trackDelta
+            self.joint.moveRelativeToCurrent(angle, 0.1)
+            
         # React depending on if hot spot (i.e. most movement) is to the left or right
-        if (colmovements[hotcol]>self.colMovementThreshold):
-
-            self._printCols(colmovements, indent="\tTrack movement ")
-            
-             # If movement detected move head by amount depending on which col saw the movement
-            offset = 1    # offset from centre to detect (centre detection won't cause movement)
-            if hotcol>=4+offset:
-            #if hotcol>3:
-                # Movement detected to the right
-                matrix = self.thermalSensor.readMatrix() # read again to nullify movement
-                #angle = (hotcol-3)*self.trackDelta
-                angle = self.trackDelta
-                self.joint.moveRelativeToCurrent(-angle, 0.1)
-
-            elif hotcol <=3-offset:
-            #elif hotcol <4:
-                # Movement detected to the left
-                matrix = self.thermalSensor.readMatrix() # read again to nullify movement
-                #angle = (hotcol+1)*self.trackDelta
-                angle = self.trackDelta
-                self.joint.moveRelativeToCurrent(angle, 0.1)
-            
+        if (detectedSignificantMovement):
             return True
         else:
             # No movement
@@ -409,7 +409,11 @@ class Head:
             s = indent
             for c in cols: s += "{:>5.2f} ".format(c)  
             self.log.info(s)
-            s = indent + "      "*cols.index(max(cols)) + "  ^"
+            if max(cols)>self.colMovementThreshold:
+                s = indent + "      "*cols.index(max(cols)) + "  ^"
+            else:
+                s = indent + "      "*cols.index(max(cols)) + "  '"
+
             self.log.info(s)
 
 

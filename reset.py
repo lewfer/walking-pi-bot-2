@@ -25,3 +25,5 @@ def set90Degrees():
         legPair.right.hip.moveDirectTo(90)
 
 set90Degrees()
+
+animal.stopCry()
