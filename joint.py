@@ -151,6 +151,7 @@ class Joint():
     def nudge(self, amount=0):
         '''Used for calibration.  Angle limited to 0-180'''
         newAngle = min(180,max(0,self._angle + amount))
+        #print("Nudge", self._pin, amount, self._angle, newAngle)
         self._angle = newAngle
         #print(self._angle)
         self._servo.angle(self._angle)                                                      # move to final angle
