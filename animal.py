@@ -143,6 +143,28 @@ class Animal():
         # Try 2, 1, 0.5, 0.25
         self.settings['STEPSPERDEGREE'] = 0.25
 
+        # If the head tracks humans when it sees them
+        self.settings['HUMANTRACKING'] = False
+
+        # Head movement range in degrees
+        self.settings['HEADHIGHANGLE'] = 180
+        self.settings['HEADLOWANGLE'] = 0
+        self.settings['HEADMIDANGLE'] = 90
+
+        # Change in head angle when tracking
+        self.settings['HEADTRACKDELTA'] = 10
+
+        # Sensor thresholds
+        self.settings['SHORTDISTANCE'] = 30     # triggers short-distance interrupt when distance less than this
+        self.settings['LONGDISTANCE'] = 200     # triggers long-distance interrupt when distance more than this
+        self.settings['HUMANDETECTMIN'] = 24    # triggers human-detect interrupt when heat between min and max
+        self.settings['HUMANDETECTMAX'] = 30    # triggers human-detect interrupt when head between min and max
+
+        self.settings['RUNSPACENEEDED'] = 100   # Space in cmneeded for robot to be able to run
+
+        self.settings['FORWARDMOVEMENTS'] = ['shunt','swimBreast', 'swimButterfly', 'swimFrontCrawl']
+
+
     def loadSettings(self):
         '''Load the settings file, which contains the calibrated settings for each joint'''
 
@@ -512,7 +534,12 @@ class Animal():
 
     def _forward(self, speed=1):
         '''Move forward in a random way'''
-        actions = ['self._shunt(speed)','self._swimBreast(speed)', 'self._swimButterfly(speed)', 'self._swimFrontCrawl(speed)']
+
+        actions = []
+        for movement in self.settings['FORWARDMOVEMENTS']:
+            actions.append('self._' + movement + '(speed)')
+        #print(actions)
+        #actions = ['self._shunt(speed)','self._swimBreast(speed)', 'self._swimButterfly(speed)', 'self._swimFrontCrawl(speed)']
         choice = random.choice(actions)
         self.log.info("Forward: " + choice)
         exec(choice)
@@ -1024,18 +1051,19 @@ class Animal():
             # Set up a thread for each leg movement and move all legs simultaneously
             left = 'L0'
             right = 'R0'
-            threads = ['L0','R0','L1','R1']
+            #threads = ['L0','R0','L1','R1']
+            threads = ['L0','R0']
             for i in range(3):
-                self._runOnThread('L0', 'kneeFullUp', {'t':t})
-                self._runOnThread('R0', 'kneeFullUp', {'t':t})   
-                self._runOnThread('L1', 'kneeFullDown', {'t':t})
-                self._runOnThread('R1', 'kneeFullDown', {'t':t})     
+                self._runOnThread('L0', 'kneeOffFloor', {'t':t})
+                self._runOnThread('R0', 'kneeOffFloor', {'t':t})   
+                #self._runOnThread('L1', 'kneeFullDown', {'t':t})
+                #self._runOnThread('R1', 'kneeFullDown', {'t':t})     
                 self._joinThreads(threads)    
                 
                 self._runOnThread('L0', 'kneeFullDown', {'t':t})
                 self._runOnThread('R0', 'kneeFullDown', {'t':t})       
-                self._runOnThread('L1', 'kneeFullUp', {'t':t})
-                self._runOnThread('R1', 'kneeFullUp', {'t':t})                   
+                #self._runOnThread('L1', 'kneeOffFloor', {'t':t})
+                #self._runOnThread('R1', 'kneeOffFloor', {'t':t})                   
                 self._joinThreads(threads)   
         else:
             # Set up a thread for each leg movement and move all legs simultaneously
@@ -1043,8 +1071,8 @@ class Animal():
             right = 'R0'
             threads = ['L0','R0']
             for i in range(3):
-                self._runOnThread('L0', 'kneeFullUp', {'t':t})
-                self._runOnThread('R0', 'kneeFullUp', {'t':t})      
+                self._runOnThread('L0', 'kneeOffFloor', {'t':t})
+                self._runOnThread('R0', 'kneeOffFloor', {'t':t})      
                 self._joinThreads(threads)    
                  
                 self._runOnThread('L0', 'kneeFullDown', {'t':t})
@@ -1092,6 +1120,25 @@ class Animal():
         
         #self._stopped = False
 
+        # Rear legs down
+        threads = []
+        if len(self.legPairs)>=2:
+            pair = len(self.legPairs)-1
+            left = 'L'+str(pair)
+            right = 'R'+str(pair)
+            threads += [left,right]
+            self._runOnThread(left, 'kneeFullDown', {'t':t})
+            self._runOnThread(right, 'kneeFullDown', {'t':t})        
+
+        # Front legs up       
+        left = 'L0'
+        right = 'R0'
+        threads += [left,right]
+        self._runOnThread(left, 'sit', {'t':t})
+        self._runOnThread(right, 'sit', {'t':t}) 
+
+        """   
+
         # Set up a thread for each leg movement and move all legs simultaneously
         threads = []
         for pair in range(len(self.legPairs)):
@@ -1100,6 +1147,8 @@ class Animal():
             threads += [left,right]
             self._runOnThread(left, 'sit', {'t':t})
             self._runOnThread(right, 'sit', {'t':t})    
+
+        """
 
         # Wait for all threads to stop
         self._joinThreads(threads)        
@@ -1280,45 +1329,47 @@ class Animal():
 
         #self._stopped = False
 
-        self.cry()
-        print("A", self._stopped)
+        #self.cry()
+
+        #sleep(random.randint(2, 5))
 
         # Bounce for a bit
-        self._bounce()
-        print("B", self._stopped)
+        #self._bounce()
 
         # Put in alert state
-        self._scare()
-        print("B", self._stopped)
+        #self._scare()
 
-        self.stopCry()
+        #self.stopCry()
 
-        print("D", self._stopped)
 
         #self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
 
-        noMovementCount = 0
+        if self.settings['HUMANTRACKING']:
+            noMovementCount = 0
 
-        while True:
-            print("Stopped",self._stopped)
-            # Track the movement that was detected
-            if self.head.trackMovement():
-                noMovementCount = 0 # reset
-                #self.log.info("Still tracking")
-            else:
-                noMovementCount += 1
-                if noMovementCount > 30: #!!
-                    # Waited for a while and not movement detected, so stop tracking
-                    self.log.info("Stopped tracking due to no movement")
-                    #self._setTimer(0, self._timerAction) # start the next action immediately
-                    self._stopped = True
+            while True:
+                print("Stopped",self._stopped)
+                # Track the movement that was detected
+                if self.head.trackMovement():
+                    noMovementCount = 0 # reset
+                    #self.log.info("Still tracking")
+                else:
+                    noMovementCount += 1
+                    if noMovementCount > 30: #!!
+                        # Waited for a while and not movement detected, so stop tracking
+                        self.log.info("Stopped tracking due to no movement")
+                        #self._setTimer(0, self._timerAction) # start the next action immediately
+                        self._stopped = True
 
-            # If request was made to end , break out of loop
-            if self._stopped:
-                self.log.info("Stopped track movement")
-                break         
+                # If request was made to end , break out of loop
+                if self._stopped:
+                    self.log.info("Stopped track movement")
+                    break         
 
-            sleep(0.1)
+                sleep(0.1)
+        else:
+            # Just do one movement
+            self.head.trackMovement()
         
 
     def _trackHotspot(self):
@@ -1399,6 +1450,10 @@ if __name__ == "__main__":
 
     # Run through all the actions
 
+    animal.runAction(animal._sit)
+    sleep(t)
+
+    """
     for i in range(20):
       animal.runAction(animal._forward)
       sleep(t)
@@ -1417,6 +1472,7 @@ if __name__ == "__main__":
 
     animal.runAction(animal._backLeft)
     sleep(t)
+    """
 
     """ 
     animal.runAction(animal._point)

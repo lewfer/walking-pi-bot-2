@@ -70,7 +70,8 @@ class RandomAnimal(Animal):
             'M':'do_detectMovement()',
             'T':'do_trackMovement()',
             'J':'do_jump()',
-            'O':'do_turn()'
+            'O':'do_turn()',
+            'N':'do_bounce()'
             }
 
         self.actionName = {
@@ -99,7 +100,8 @@ class RandomAnimal(Animal):
             'M':'detectMovement',
             'T':'trackMovement',
             'J':'jump',
-            'O':'turn'
+            'O':'turn',
+            'N':'bounce'
             }            
 
 
@@ -112,11 +114,11 @@ class RandomAnimal(Animal):
         Animal.setDefaultSettings(self)   
 
         # Weights for random movement action choices
-        #                                 ['.','S','B','L','R','U','P','E','A','+','-', 'K']
-        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  0,  1,  1,  10,  1, 40]
+        #                                 ['.','S','B','L','R','U','P','E','A','+','-', 'K', 'N']
+        self.settings['RANDOMWEIGHTS'] = [  40, 10, 1,  3,  3,  2,  0,  1,  1,  10,  1, 40, 2]
 
         # Min/max time for action to run
-        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[20,30],'+':[20,30],'-':[2,10],'K':[1,2]}
+        self.settings['RANDOMTIME'] = {'B':[2,8],'L':[2,6],'R':[2,6],'S':[2,30],'P':[2,30],'E':[2,30],'A':[2,30],'U':[5,50],'M':[10,20],'T':[5,10],'+':[20,30],'-':[2,10],'K':[1,2], 'N':[4,6]}
 
         # Number of seconds to wait before generating another random action
         self.settings['TICKPERIOD'] = 1
@@ -124,21 +126,7 @@ class RandomAnimal(Animal):
         # Number of alertness points to add for each tick when the animal is unwinding
         self.settings['UNWINDALERTNESSINCREASE'] = 5
 
-        # Head movement range in degrees
-        self.settings['HEADHIGHANGLE'] = 180
-        self.settings['HEADLOWANGLE'] = 0
-        self.settings['HEADMIDANGLE'] = 90
 
-        # Change in head angle when tracking
-        self.settings['HEADTRACKDELTA'] = 10
-
-        # Sensor thresholds
-        self.settings['SHORTDISTANCE'] = 30     # triggers short-distance interrupt when distance less than this
-        self.settings['LONGDISTANCE'] = 200     # triggers long-distance interrupt when distance more than this
-        self.settings['HUMANDETECTMIN'] = 24    # triggers human-detect interrupt when heat between min and max
-        self.settings['HUMANDETECTMAX'] = 30    # triggers human-detect interrupt when head between min and max
-
-        self.settings['RUNSPACENEEDED'] = 100   # Space in cmneeded for robot to be able to run
 
 
 
@@ -235,6 +223,7 @@ class RandomAnimal(Animal):
         if movement:
             # We saw something move, so track it for a while
             self.log.info("\tSaw a movement")
+            self.cry()
             self.do_trackMovement()
             self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
 
@@ -337,6 +326,9 @@ class RandomAnimal(Animal):
     def do_unwind(self):
         self._setTimer(self._timerDelay, 'J')   
         self._handleAction(self._unwind, "U")
+
+    def do_bounce(self): 
+        self._handleAction(self._bounce, "N")
 
     def do_point(self):
         self._handleAction(self._point, "P")
@@ -504,7 +496,7 @@ class RandomAnimal(Animal):
             elif self._currentAction=="F" and self.age % 5 == 0: # every 5 seconds
                 # No timer, so allow another random, weighted choice
                 # . means no change to current action
-                actions = ['.','S','B','L','R','U','P','E','A','+','-','K']
+                actions = ['.','S','B','L','R','U','P','E','A','+','-','K','N']
                 #actions = ['.','.','.','.','.','.','.','.','.','.','.','K'] #!!
                 weights = self.settings['RANDOMWEIGHTS']
                 choice = random.choices(actions, weights)[0]
@@ -603,7 +595,7 @@ class RandomAnimal(Animal):
         '''There is an interrupt that needs to be handled'''
 
         # Handle the interrupt if no other interrupt currently being handled
-        print("Handle interrupt", self._stopped)
+        #print("Handle interrupt", self._stopped)
         if not self._interruptBeingHandled and not self._stopped:
             self.log.info("Handle Interrupt {}".format(self._interruptId))
             self._interruptBeingHandled = True
