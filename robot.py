@@ -103,10 +103,11 @@ class Robot(Programmer):
             #print(optionName)
 
             # Nudge joint
-            if self.rotaryAction!=0:
-                print(self.rotaryAction)
-                left.nudgeHip(self.rotaryAction)
-                right.nudgeHip(self.rotaryAction)
+            amount = self.rotaryAction
+            if amount!=0:
+                #print(amount)
+                left.nudgeHip(amount)
+                right.nudgeHip(amount)
             elif optionName=="save":
                 self.animal.settings["leg_ranges"][legPair]["left"]["hip"][pos] = int(left.hip._angle)
                 self.animal.settings["leg_ranges"][legPair]["right"]["hip"][pos] = int(right.hip._angle)
@@ -164,10 +165,12 @@ class Robot(Programmer):
             #print(optionName)
 
             # Nudge joint
-            if self.rotaryAction!=0:
-                print(self.rotaryAction)
-                left.nudgeKnee(self.rotaryAction)
-                right.nudgeKnee(self.rotaryAction)
+            amount = self.rotaryAction
+            if amount!=0:
+                #print(amount)
+                left.nudgeKnee(amount)
+                right.nudgeKnee(amount)
+                #print(left.knee._angle, right.knee._angle)
             elif optionName=="save":
                 self.animal.settings["leg_ranges"][legPair]["left"]["knee"][pos] = int(left.knee._angle)
                 self.animal.settings["leg_ranges"][legPair]["right"]["knee"][pos] = int(right.knee._angle)
@@ -223,9 +226,10 @@ class Robot(Programmer):
             #print(optionName)
 
             # Nudge joint
-            if self.rotaryAction!=0:
-                print(self.rotaryAction)
-                joint.nudge(self.rotaryAction)
+            amount = self.rotaryAction
+            if amount!=0:
+                #print(amount)
+                joint.nudge(amount)
             elif optionName=="save":
                 setting[LEG_MID] = int(joint._angle)
                 self.animal.storeAndReapplySettings()     
@@ -520,6 +524,7 @@ except Exception:
 print("Mode",mode)
 
 robot = Robot(eval(mode+"()"), menu)
+
 robot.animal.start()
 robot.runMenu("main")
 

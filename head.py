@@ -118,7 +118,7 @@ class Head:
         hotcol = hotspot[1]
 
         detectedSignificantMovement = colmovements[hotcol]>self.colMovementThreshold
-        self._printCols(colmovements, indent="\tTrack (" + str(detectedSignificantMovement) + ")")
+        self._printCols(colmovements, indent="Track (" + str(detectedSignificantMovement) + ")")
 
         # If movement detected move head by amount depending on which col saw the movement
         offset = 1    # offset from centre to detect (centre detection won't cause movement)
@@ -172,11 +172,11 @@ class Head:
         # See if we had significant movement
         if (colmovements[hotcol]>self.colMovementThreshold):
             self.log.info("\tMovement:")
-            self._printCols(colmovements, indent="\t")
+            self._printCols(colmovements, indent="")
             return True
         else:
             self.log.info("\tNo movement:")
-            self._printCols(colmovements, indent="\t")
+            self._printCols(colmovements, indent="")
             return False
 
     def move(self, position, t=0):
@@ -190,7 +190,7 @@ class Head:
         base = -100
         for i in range(numMovements):
             self.move(random.randint(base, base+100), t=0)
-            sleep(0.25) # try sleeping to avoid thermal camera detecting movement immediately
+            sleep(1) # try sleeping to avoid thermal camera detecting movement immediately
             # Check for thermal movement
             if self.thermalSensor is not None:
                 self.thermalSensor.readMatrix()  # read
@@ -209,6 +209,8 @@ class Head:
 
     def scan(self):
         """Scan left to right, reading distances and checking for movement.  """
+
+        self.log.debug("\tHead scan")
 
         # Move head to the left
         self.move(-100, t=2)
@@ -236,11 +238,11 @@ class Head:
                 if dist>maxDist:
                     maxPos = pos
                     maxDist = dist
-                if pos<=0 and dist<minLeftDist:
+                if pos<0 and dist<minLeftDist:
                     minLeftDist = dist
                 if pos>0 and dist<minRightDist:
                     minRightDist = dist       
-                if pos<=0 and dist>maxLeftDist:
+                if pos<0 and dist>maxLeftDist:
                     maxLeftDist = dist
                 if pos>0 and dist>maxRightDist:
                     maxRightDist = dist    
@@ -406,13 +408,13 @@ class Head:
 
     def _printCols(self,cols, indent=""):
         if self.log is not None:
-            s = indent
+            s = "\t"+indent
             for c in cols: s += "{:>5.2f} ".format(c)  
             self.log.info(s)
             if max(cols)>self.colMovementThreshold:
-                s = indent + "      "*cols.index(max(cols)) + "  ^"
+                s = "\t"+" "*len(indent) + "      "*cols.index(max(cols)) + "  ^"
             else:
-                s = indent + "      "*cols.index(max(cols)) + "  '"
+                s = "\t"+" "*len(indent) + "      "*cols.index(max(cols)) + "  '"
 
             self.log.info(s)
 

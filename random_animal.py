@@ -69,8 +69,38 @@ class RandomAnimal(Animal):
             '-':'do_crawl()',
             'M':'do_detectMovement()',
             'T':'do_trackMovement()',
-            'J':'do_jump()'
+            'J':'do_jump()',
+            'O':'do_turn()'
             }
+
+        self.actionName = {
+            '*':'default',
+            'K':'look',
+            'F':'forward', 
+            'B':'backward',
+            'L':'left',
+            'R':'right',
+            'l':'backLeft',
+            'r':'backRight',
+            '\\':'leftNoCheck',
+            '/':'rightoCheck',            
+            'W':'wait',
+            'U':'unwind',
+            'P':'point',
+            'E':'eat',
+            'S':'sit',
+            '^':'kneesup',
+            'v':'kneesdown',
+            '<':'hipsbackward',
+            '>':'hipsforward',
+            'A':'alert',
+            '+':'run',
+            '-':'crawl',
+            'M':'detectMovement',
+            'T':'trackMovement',
+            'J':'jump',
+            'O':'turn'
+            }            
 
 
     # Settings 
@@ -197,7 +227,7 @@ class RandomAnimal(Animal):
         self.head.pauseSensors()        # don't monitor sensors
 
         # Do a scan (move head from side-to-side) looking for short distances
-        self.log.info("\tScanning")
+        self.log.info("Looking")
         movement, rearMovement = self.head.look()
         #print("\tScan minpos={} maxpos={} movement={}".format(minPos, maxPos, movement))
 
@@ -362,13 +392,13 @@ class RandomAnimal(Animal):
             print("Escaped", dist)
             self.stopCry()
         else:
-            print("Still stuck", dist, "cm")
+            #print("Still stuck", dist, "cm")
             self.cry()
 
     def do_checkEscapeLeftAntenna(self):
         '''Check if we have escaped from a stuck left antenna'''
         if self.leftAntenna.is_pressed:
-            print("Still stuck")
+            #print("Still stuck")
             self.cry()
         else:
             # We have escaped
@@ -379,7 +409,7 @@ class RandomAnimal(Animal):
     def do_checkEscapeRightAntenna(self):
         '''Check if we have escaped from a stuck right antenna'''
         if self.rightAntenna.is_pressed:
-            print("Still stuck")
+            #print("Still stuck")
             self.cry()
         else:
             # We have escaped
@@ -418,6 +448,7 @@ class RandomAnimal(Animal):
 
     def _setTimer(self, delay, action):
         """Set a new timer to run action after delay seconds """
+        self.log.debug("_setTimer {} {}".format(delay, action))
         self._timerAgeStart = self.age      # record age when we set the timer
         self._timerDelay = delay            # how long to wait
         self._timerAction = action          # the action to carry out when timer comes of age
@@ -440,6 +471,8 @@ class RandomAnimal(Animal):
         """Continue to run random actions until stopped"""
         self._runningRandom = True
         while self._runningRandom:
+            #print(".")
+
             # Timers take first priority
             if self._timerAction is not None:
                 if self.age-self._timerAgeStart >= self._timerDelay:
@@ -511,16 +544,18 @@ class RandomAnimal(Animal):
         """Print out the status for debugging"""
 
         if self._interruptId != "human-detect": # and self._currentAction!="M":
+            actionName = "none" if self._timerAction is None else self.actionName[self._timerAction]
             if self._timerDelay == 0:
-                timerMsg = "{}_when_done".format(self._timerAction)
+                timerMsg = "{}_when_done".format(actionName)
             else:
-                timerMsg = "{}_in_{}s (of {}s)".format(self._timerAction, self._timerDelay-(self.age-self._timerAgeStart), self._timerDelay)
+                timerMsg = "{}_in_{}s (of {}s)".format(actionName, self._timerDelay-(self.age-self._timerAgeStart), self._timerDelay)
 
-            # alertness={} energy={}  threads={} human={} self.alertness, self.energy, activeCount(), self.lastHumanDetectAge
-            self.log.info("\t{} age={} next={} int={} dist={} temp={},{}".format(
-                self._currentAction, self.age, 
+            # age={} alertness={} energy={}  human={} self.age, self.alertness, self.energy, , self.lastHumanDetectAge
+            self.log.info("\t{} next={} int={} threads={} dist={} temp={},{}".format(
+                self.actionName[self._currentAction], 
                 timerMsg,
                 self._interruptId, 
+                activeCount(),
                 self.head.lastDistance, self.head.lastMinTemperature,self.head.lastMaxTemperature,
                 ))
 
@@ -568,7 +603,8 @@ class RandomAnimal(Animal):
         '''There is an interrupt that needs to be handled'''
 
         # Handle the interrupt if no other interrupt currently being handled
-        if not self._interruptBeingHandled:
+        print("Handle interrupt", self._stopped)
+        if not self._interruptBeingHandled and not self._stopped:
             self.log.info("Handle Interrupt {}".format(self._interruptId))
             self._interruptBeingHandled = True
 

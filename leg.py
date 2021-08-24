@@ -194,6 +194,13 @@ class Leg():
             t1 = Thread(target=self.knee.moveRelativeToHigh, kwargs={'deltaAngle':kneeOffset, 'secs':t})
         runThreadsTogether([t1])
 
+    def kneeOffFloor(self, t=1):
+        '''Put the knee up a little'''
+        kneeOffset = 10 * self.direction        # knee up a bit
+        t1 = Thread(target=self.knee.moveRelativeToMid, kwargs={'deltaAngle':kneeOffset, 'secs':t})
+        runThreadsTogether([t1])
+
+
     def hipFullForward(self, t=1):
         '''Put the hip fully forward'''
         hipOffset = 0
