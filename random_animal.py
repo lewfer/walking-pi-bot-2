@@ -154,10 +154,10 @@ class RandomAnimal(Animal):
             self.do_trackMovement()
             self._setTimer(self._randint(self.settings['RANDOMTIME']['T']), 'F')   
 
-        elif rearMovement:
-            self.log.info("\tSaw a rear movement")
-            self.do_turn()
-            self._setTimer(16, 'K') #!!turn time
+        #elif rearMovement:
+        #    self.log.info("\tSaw a rear movement")
+        #    self.do_turn()
+        #    self._setTimer(16, 'K') #!!turn time
             
         elif minDist < self.settings['SHORTDISTANCE'] : 
             # We saw an obstacle close by
