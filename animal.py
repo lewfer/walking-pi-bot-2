@@ -1450,7 +1450,7 @@ if __name__ == "__main__":
 
     # Run through all the actions
 
-    animal.runAction(animal._sit)
+    animal.runAction(animal._trackMovement)
     sleep(t)
 
     """
