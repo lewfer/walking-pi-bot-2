@@ -57,12 +57,12 @@ class Head:
         self.joint.highAngle = 160              # high angle for servo (rightmost angle)
         self.joint.lowAngle = 20                # lowest angle for servo (leftmost angle)
         self.trackDelta = 10                    # change in angle each iteration when tracking movement
-        self.shortDistance = 20                 # distance in cm to obstacle below which triggers a short-distance interrupt
+        self.shortDistance = 30                 # distance in cm to obstacle below which triggers a short-distance interrupt
         self.longDistance = 1000                # distance in cm to obstacle above which triggers a long-distance interrupt
         self.humanDetectMinTemperature = 26     # temperature in C which triggers human-detect interrupt
         self.humanDetectMaxTemperature = 30     # temperature in C which triggers human-detect interrupt
         self.colMovementThreshold = 6           # total temperature change in a matrix column above which we say we saw movement
-        self.movementWaitSeconds = 2            # how long to wait between thermal readings to detect movement
+        self.movementWaitSeconds = 0.5          # how long to wait between thermal readings to detect movement
 
         self.log = log
 
@@ -188,6 +188,7 @@ class Head:
         """Look around, moving head left to right"""
         numMovements = random.randint(3,8)
         base = -100
+        self.tail.wait_for_no_motion(timeout=self.movementWaitSeconds)
         for i in range(numMovements):
             self.move(random.randint(base, base+100), t=1)
             sleep(1) # try sleeping to avoid thermal camera detecting movement immediately
