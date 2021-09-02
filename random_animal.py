@@ -382,32 +382,37 @@ class RandomAnimal(Animal):
             # We have escaped
             self._setTimer(0, self._timerAction) # Start immediately
             print("Escaped", dist)
-            self.stopCry()
+            #self.stopCry()
         else:
             #print("Still stuck", dist, "cm")
-            self.cry()
+            #self.cry()
+            pass
 
     def do_checkEscapeLeftAntenna(self):
         '''Check if we have escaped from a stuck left antenna'''
         if self.leftAntenna.is_pressed:
             #print("Still stuck")
-            self.cry()
+            #self.cry()
+            pass
         else:
             # We have escaped
             self._setTimer(0, self._timerAction) # Start immediately
             print("Escaped")
-            self.stopCry()
+            #self.stopCry()
+            pass
 
     def do_checkEscapeRightAntenna(self):
         '''Check if we have escaped from a stuck right antenna'''
         if self.rightAntenna.is_pressed:
             #print("Still stuck")
-            self.cry()
+            #self.cry()
+            pass
         else:
             # We have escaped
             self._setTimer(0, self._timerAction) # Start immediately
             print("Escaped")
-            self.stopCry()
+            #self.stopCry()
+            pass
 
 
     # Action management

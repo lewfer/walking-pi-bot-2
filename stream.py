@@ -9,6 +9,8 @@ import socketserver
 from threading import Condition
 from http import server
 
+serv = None
+
 stream_status = False
 
 class StreamingOutput(object):
@@ -56,27 +58,40 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
             self.send_error(404)
             self.end_headers()
 
+class DummyHandler(server.BaseHTTPRequestHandler):
+
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Sorry, the robot camera is not streaming')  
+
+
 class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 
 def run(port = 8001):
-    global output, server, stream_status
+    global output, server, stream_status, serv
     #with picamera.PiCamera(resolution='640x480', framerate=10) as camera:
     #with picamera.PiCamera(resolution='1296x730', framerate=24) as camera:
-    with picamera.PiCamera(resolution='1024x576', framerate=10) as camera:
+    try:
+        with picamera.PiCamera(resolution='1024x576', framerate=10) as camera:
 
-        output = StreamingOutput()
-        #Uncomment the next line to change your Pi's Camera rotation (in degrees)
-        camera.rotation = 180
-        camera.start_recording(output, format='mjpeg')
-        try:
-            address = ('', port)
-            stream_status = True
-            server = StreamingServer(address, StreamingHandler)
-            server.serve_forever()
-        finally:
-            camera.stop_recording()
+            output = StreamingOutput()
+            #Uncomment the next line to change your Pi's Camera rotation (in degrees)
+            camera.rotation = 180
+            camera.start_recording(output, format='mjpeg')
+            try:
+                address = ('', port)
+                stream_status = True
+                server = StreamingServer(address, StreamingHandler)
+                server.serve_forever()
+            finally:
+                camera.stop_recording()
+    except (picamera.exc.PiCameraMMALError, picamera.exc.PiCameraError):
+        httpd = server.HTTPServer(('', 8001), DummyHandler)
+        httpd.serve_forever()
+
 
 def status():
     global stream_status
@@ -87,5 +102,11 @@ def stop():
     stream_status = False
     server.shutdown()
     server.server_close()
+
+
+
+
+
+
 
 run()

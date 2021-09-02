@@ -319,6 +319,15 @@ class Head:
         # Return results
         return minPos, minDist, maxPos, maxDist
 
+    # Shake head
+    def shake(self):
+        amount = 30
+        mult = -1
+        for count in range(6):
+            self.move(amount, t=0.75)
+            amount *= mult
+
+        
 
     # Sensor management
     # ---------------------------------------------------------------------------------------------
@@ -437,7 +446,7 @@ if __name__ == "__main__":
     # Create the head
     head = Head(interrupt, log)
 
-    print("Mode: 1) Track hotspot, 2) Track movements, 3) Detect movement, 4) Scan, 5) Scan left, 6) Scan right, 7) Monitor")
+    print("Mode: 1) Track hotspot, 2) Track movements, 3) Detect movement, 4) Scan, 5) Scan left, 6) Scan right, 7) Monitor 8) Shake")
     mode = int(input()[0])
 
     if mode==1:
@@ -477,6 +486,9 @@ if __name__ == "__main__":
         for i in range(100):
             sleep(0.2)
         head.stopSensors()
+
+    elif mode==8:
+        head.shake()
 
     #head.move(-100, t=2)
     #sleep(1)

@@ -1342,6 +1342,7 @@ class Animal():
         #self.stopCry()
 
 
+
         #self._setTimer(30, self._timerAction) # delay the next action, so we have time to track the movement !!
 
         if self.settings['HUMANTRACKING']:
@@ -1370,6 +1371,8 @@ class Animal():
         else:
             # Just do one movement
             self.head.trackMovement()
+
+            self.head.shake()
         
 
     def _trackHotspot(self):
