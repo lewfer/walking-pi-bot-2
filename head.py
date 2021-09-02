@@ -323,7 +323,7 @@ class Head:
     def shake(self):
         amount = 30
         mult = -1
-        for count in range(6):
+        for count in range(12):
             self.move(amount, t=0.75)
             amount *= mult
 
