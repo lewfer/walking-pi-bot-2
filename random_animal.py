@@ -115,7 +115,7 @@ class RandomAnimal(Animal):
 
         # Weights for random movement action choices
         #                                 ['.','S','B','L','R','U','P','E','A','+','-', 'K', 'N', 'O']
-        self.settings['RANDOMWEIGHTS'] =  [ 120, 10, 1,  3,  3,  2,  0,  1,  1, 40,  1,  20,  2,  50]
+        self.settings['RANDOMWEIGHTS'] =  [ 120, 10, 1,  3,  3,  2,  0,  1,  1, 40,  1,  20,  2,  15]
 
         # Min/max time for action to run
         self.settings['RANDOMTIME'] = {"B": [2, 8], "L": [2, 6], "R": [2, 6], "S": [1, 3], "P": [2, 30], "E": [2, 30], "A": [2, 30], "U": [5, 50], "M": [10, 20], "T": [5, 10], "+": [20, 30], "-": [2, 10], "K": [1, 2], "N": [4, 6], "O": [10, 15]}
