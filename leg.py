@@ -67,7 +67,7 @@ class Leg():
         runThreadsTogether([t1,t2])
 
         # Put the knee down, ready for the back push
-        kneeDown = -KNEEMOVEMENT * self.direction
+        #kneeDown = -KNEEMOVEMENT * self.direction
         #self.knee.moveRelativeToMid(kneeDown, t/2) 
         self.kneeFullDown(t/2)
 
@@ -88,8 +88,9 @@ class Leg():
         runThreadsTogether([t1,t2])
 
         # Put the knee down, ready for the forward push
-        kneeDown = -KNEEMOVEMENT * self.direction
-        self.knee.moveRelativeToMid(kneeDown, t/2)      
+        #kneeDown = -KNEEMOVEMENT * self.direction
+        #self.knee.moveRelativeToMid(kneeDown, t/2)     
+        self.kneeFullDown(t/2) 
 
     def reachHalfBackward(self, t):
         '''Make the leg do a half reach backward movement, the first part of a walk'''
@@ -108,8 +109,9 @@ class Leg():
         runThreadsTogether([t1,t2])
 
         # Put the knee down, ready for the forward push
-        kneeDown = -KNEEMOVEMENT * self.direction
-        self.knee.moveRelativeToMid(kneeDown, t/2)                 
+        #kneeDown = -KNEEMOVEMENT * self.direction
+        #self.knee.moveRelativeToMid(kneeDown, t/2)   
+        self.kneeFullDown(t/2)               
 
     def pushBackward(self, t):
         '''Make the leg do a push backward movement, the second part of a walk'''

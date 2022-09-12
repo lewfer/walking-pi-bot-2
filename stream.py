@@ -75,7 +75,9 @@ def run(port = 8001):
     #with picamera.PiCamera(resolution='640x480', framerate=10) as camera:
     #with picamera.PiCamera(resolution='1296x730', framerate=24) as camera:
     try:
-        with picamera.PiCamera(resolution='1024x576', framerate=10) as camera:
+        #with picamera.PiCamera(resolution='1024x576', framerate=10) as camera:
+
+        with picamera.PiCamera(resolution='568x320', framerate=10) as camera:            
 
             output = StreamingOutput()
             #Uncomment the next line to change your Pi's Camera rotation (in degrees)
