@@ -14,7 +14,7 @@ or by an interrupt (e.g. obstacle detected).
 # Imports
 # -------------------------------------------------------------------------------------------------
 from animal import *
-
+import random
 
 # Class
 # -------------------------------------------------------------------------------------------------
@@ -197,7 +197,7 @@ class RandomAnimal(Animal):
                 self.do_backward()
 
             # Whatever we decided to do, return to going forward eventually
-            self._setTimer(30, 'F')                   #  !!
+            self._setTimer(random.randint(5,30), 'F')                   #  !!
         else:
             # We are not too close to anything
             self.log.info("\tNo issues seen, so move F")
@@ -376,12 +376,17 @@ class RandomAnimal(Animal):
 
 
     def do_checkEscape(self):
+        #if self._timerDelay>0: # already escaped and scheduled next action
+        #    return
+        #print("do_checkEscape", self._timerDelay, self._timerAction)
+
         '''Check if we have escaped from obstacles' by looking for a good distance ahead'''
         dist = self.head.distanceSensor.readMedianCm(3)
         if dist > self.settings['SHORTDISTANCE'] * 2:
             # We have escaped
-            self._setTimer(0, self._timerAction) # Start immediately
+            self._setTimer(2, self._timerAction) # Start after a little while (extra seconds to give a better escape)
             print("Escaped", dist)
+            self._clearInterrupt()  
             #self.stopCry()
         else:
             #print("Still stuck", dist, "cm")
